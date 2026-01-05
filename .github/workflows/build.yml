@@ -17,7 +17,6 @@ jobs:
           - os: macos-latest
             platform: mac-arm64
 
-
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -25,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up dependencies (Linux)
-        if: matrix.platform == 'linux'
+        if: matrix.platform == 'lin-x64'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -44,6 +43,7 @@ jobs:
           https://vcvrack.com/downloads/Rack-SDK-2.6.6-${{ matrix.platform }}.zip \
           -o sdk.zip
           unzip sdk.zip
+
       - name: Verify SDK contents
         run: |
           ls -l sdk.zip
@@ -52,6 +52,17 @@ jobs:
 
       - name: Build plugin
         run: make dist RACK_DIR=Rack-SDK
+
+      - name: Debug - List files
+        if: always()
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          ls -la
+          echo "=== Checking for dist directory ==="
+          ls -la dist/ || echo "dist/ directory does not exist"
+          echo "=== Looking for .vcvplugin files ==="
+          find . -name "*.vcvplugin" || echo "No .vcvplugin files found"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
