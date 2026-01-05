@@ -13,7 +13,7 @@ I have the prototype working, just not finished the PCB design yet but it's comi
 
 In it's simplest form, use Cavian to send gates or triggers (click once for Step, and again for a Gate, once more to turn off) on it's 8 outputs.
 It can get as complex as you need it to be by chaining your 8 channels into 8 presets then 8 Groups.  
-Single click or continue to drag the mouse around the grid to create your patterns. Each mouse drag will only affect the same step once.
+In Vert mode, single clicks are used whilst on 8x8 and 1x64 single click or continue to drag the mouse around the grid to create your patterns. Each mouse drag will only affect the same step once.
 
 
 ### Randomization
