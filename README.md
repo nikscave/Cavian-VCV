@@ -65,4 +65,6 @@ Press <kbd>V</kbd> to cycle through display layouts:
 Cavian is in active development. If you encounter any bugs or have suggestions for new features:
 * Please open an issue in the **[Issues Tab](https://github.com/nikscave/Cavian-VCV/issues)** at the top of this page.
 
+Follow me on Instagram: [![Instagram](https://img.shields.io/badge/@yourmodulesmayvary-%23E4405F.svg?style=flat&logo=Instagram&logoColor=white)](https://www.instagram.com/yourmodulesmayvary)
+
 *Thank you for supporting YourModulesMayVary!*
