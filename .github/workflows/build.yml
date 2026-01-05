@@ -75,6 +75,15 @@ jobs:
           if [ -f "plugin.dll" ]; then
             objdump -p plugin.dll | grep "DLL Name:" || echo "Could not check DLL dependencies"
           fi
+          echo "=== Checking if libwinpthread is dynamically linked ==="
+          if [ -f "plugin.dll" ]; then
+            if objdump -p plugin.dll | grep -q "libwinpthread-1.dll"; then
+              echo "ERROR: libwinpthread-1.dll is still dynamically linked!"
+              exit 1
+            else
+              echo "SUCCESS: libwinpthread is statically linked"
+            fi
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
