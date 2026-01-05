@@ -10,5 +10,5 @@ include $(RACK_DIR)/plugin.mk
 # Force static linking of GCC/pthread runtime libraries and add Windows socket library
 # Use += to append after plugin.mk's flags
 ifdef ARCH_WIN
-	LDFLAGS := $(LDFLAGS) -Wl,-Bstatic -lpthread -Wl,-Bdynamic -lws2_32
+	LDFLAGS := $(filter-out -lpthread,$(LDFLAGS)) -Wl,-Bstatic -l:libpthread.a -Wl,-Bdynamic -lws2_32
 endif
