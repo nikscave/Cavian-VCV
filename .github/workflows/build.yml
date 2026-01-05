@@ -1,4 +1,4 @@
-name: Build VCV Rack Plugin
+name: Build Cavian VCV Rack Plugin
 
 on:
   workflow_dispatch:
@@ -41,7 +41,16 @@ jobs:
           Expand-Archive Rack-SDK.zip -DestinationPath .
         shell: powershell
       
-      - name: Build plugin
+      - name: Build plugin (macOS universal)
+        if: runner.os == 'macOS'
+        run: |
+          export RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
+          make clean
+          make dist ARCH="x64 arm64"
+        shell: bash
+      
+      - name: Build plugin (Linux/Windows)
+        if: runner.os != 'macOS'
         run: |
           export RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
           make clean
