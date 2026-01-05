@@ -1,0 +1,58 @@
+name: Build VCV Rack Plugin
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform:
+          - os: ubuntu-latest
+            name: Linux
+          - os: macos-latest
+            name: macOS
+          - os: windows-latest
+            name: Windows
+    
+    runs-on: ${{ matrix.platform.os }}
+    
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      
+      - name: Get Rack SDK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wget https://vcvrack.com/downloads/Rack-SDK-2.5.2-lin-x64.zip
+          unzip Rack-SDK-2.5.2-lin-x64.zip
+      
+      - name: Get Rack SDK (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          wget https://vcvrack.com/downloads/Rack-SDK-2.5.2-mac-x64+arm64.zip
+          unzip Rack-SDK-2.5.2-mac-x64+arm64.zip
+      
+      - name: Get Rack SDK (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Invoke-WebRequest -Uri "https://vcvrack.com/downloads/Rack-SDK-2.5.2-win-x64.zip" -OutFile Rack-SDK.zip
+          Expand-Archive Rack-SDK.zip -DestinationPath .
+        shell: powershell
+      
+      - name: Build plugin
+        run: |
+          export RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
+          make clean
+          make dist
+        shell: bash
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.platform.name }}-build
+          path: dist/*.vcvplugin
