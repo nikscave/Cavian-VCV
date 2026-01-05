@@ -1,21 +1,63 @@
+# Cavian Sequencer
 
-When mouse is hovered over the module, the following keyboard shortcuts can be used
+Cavian is a powerful 8-channel multi-step sequencer for VCV Rack.  
+A Eurorack Hardware version is in the works and as that will be based on ESP32 controller, your patterns generated on VCV can be saved to the external module and vice versa through your own wifi or via hotspot via the ESP32.
+I have the prototype working, just not finished the PCB design yet but it's coming 2026.  
+(Influenced by the Circadian Rhythm Gate and Trigger Sequence)
 
-1 to 8 mute/unmute a channel
+![Cavian Main Interface](/images/CavianMain.jpg)
 
-Holding G (groups) P (Presets) or C (Channels) then hitting 1 to 8, changes the Group, Preset or Channel accordingly.
+---
 
-Space bar starts/stops the sequencer
+## Logic & Editing Operations
 
-V toggles the View mode from Vertical, 8x8 and 1x64 
+In it's simplest form, use Cavian to send gates or triggers (click once for Step, and again for a Gate, once more to turn off) on it's 8 outputs.
+It can get as complex as you need it to be by chaining your 8 channels into 8 presets then 8 Groups.
 
-1x64 is for use with looped groups/presets.
 
-Random - hit this then any group or preset or channel to randomise all the steps in the target
-(right click menu can change the weight of the randomness)
+### Randomization
+1. Click the **Random** button.
+2. Click any **Group**, **Preset**, or **Channel** button to randomise all steps within that target.
+* **Weighting**: Right-click the Random button to adjust the probability weight of the algorithm.  
+![SubMenu](/images/CavianSubMenu.jpg)
 
-Copy/Paste work in similar way.
+### Load and Save
+Right click and the menu options will be obvious. Everything in VCV is saved locally to your plugins folder
 
-Future features - built in already is a live connection with the hardware counterpart, but I've not finished the module yet :-)
+### Copy & Paste
+These functions operate with the same "Select Action → Select Target" workflow:
+1. Click **Copy**, then click your source (Group/Preset/Channel).
+2. Click **Paste**, then click your destination.
 
-Please leave any feedback in the issues above, thanks for trying this out.
+---
+
+## Keyboard Shortcuts
+To use these shortcuts, ensure your mouse cursor is hovering over the module.
+
+### Channel Management
+* <kbd>1</kbd> – <kbd>8</kbd> : Toggle **Mute/Unmute** for the respective channel.
+* <kbd>Space</kbd> : **Start/Stop** the sequencer.
+
+### Navigation & Global Controls
+Use the "Hold + Number" method to quickly navigate the engine:
+* <kbd>G</kbd> + <kbd>1</kbd>–<kbd>8</kbd> : Switch **Group**
+* <kbd>P</kbd> + <kbd>1</kbd>–<kbd>8</kbd> : Switch **Preset**
+* <kbd>C</kbd> + <kbd>1</kbd>–<kbd>8</kbd> : Switch **Channel**
+
+### View Modes
+Press <kbd>V</kbd> to cycle through display layouts:
+* **Vertical**: Standard channel strip view.
+* **8x8**: Grid overview of all active channels.
+* **1x64**: Expanded view (optimized for use with looped groups and presets).
+
+![SubMenu](/images/Cavian8x8.jpg)
+
+---
+## Future Features
+* **Hardware Integration**: Built-in support for a live connection with the Cavian hardware counterpart is already present in the codebase. We just need the hardware to be available :-)
+
+## Feedback & Support
+Cavian is in active development. If you encounter any bugs or have suggestions for new features:
+* Please open an issue in the **[Issues Tab](https://github.com/nikscave/Cavian-VCV/issues)** at the top of this page.
+
+*Thank you for supporting YourModulesMayVary!*
