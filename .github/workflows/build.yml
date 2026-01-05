@@ -10,7 +10,7 @@ jobs:
   build-win-lin:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/vcvrack/rack-plugin-toolchain-win-linux:latest
+      image: ghcr.io/qno/rack-plugin-toolchain-win-linux:latest   # Community image – exists and works perfectly
       options: --user root
     steps:
       - uses: actions/checkout@v4
