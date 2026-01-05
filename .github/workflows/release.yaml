@@ -1,7 +1,12 @@
-name: Release Cavian VCV Rack Plugin
+name: Manual Release Upload
 
 on:
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'The tag of the release to upload to (must already exist)'
+        required: true
+        type: string
 
 jobs:
   build:
@@ -16,9 +21,7 @@ jobs:
             platform: mac-x64
           - os: macos-latest
             platform: mac-arm64
-
     runs-on: ${{ matrix.os }}
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -29,75 +32,25 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: >-
-            base-devel
-            mingw-w64-x86_64-toolchain
-            jq
+          install: base-devel mingw-w64-x86_64-toolchain jq
 
       - name: Set up dependencies (Linux)
         if: matrix.platform == 'lin-x64'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libgl-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libasound2-dev
+          sudo apt-get install -y libgl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libasound2-dev
 
-      - name: Download Rack SDK
-        shell: bash
+      - name: Build
+        shell: ${{ matrix.platform == 'win-x64' && 'msys2 {0}' || 'bash' }}
         run: |
-          curl -fL -H "User-Agent: GitHubActions" \
-          https://vcvrack.com/downloads/Rack-SDK-2.6.6-${{ matrix.platform }}.zip \
-          -o sdk.zip
+          curl -fL https://vcvrack.com/downloads/Rack-SDK-2.6.6-${{ matrix.platform }}.zip -o sdk.zip
           unzip sdk.zip
+          make dist RACK_DIR=Rack-SDK
 
-      - name: Verify SDK contents
-        shell: bash
-        run: |
-          ls -l sdk.zip
-          ls Rack-SDK
-          test -f Rack-SDK/plugin.mk
-
-      - name: Build plugin (Windows)
-        if: matrix.platform == 'win-x64'
-        shell: msys2 {0}
-        run: make dist RACK_DIR=Rack-SDK
-
-      - name: Build plugin (Mac/Linux)
-        if: matrix.platform != 'win-x64'
-        shell: bash
-        run: make dist RACK_DIR=Rack-SDK
-
-      - name: Debug - List files
-        if: always()
-        shell: bash
-        run: |
-          echo "=== Current directory ==="
-          pwd
-          ls -la
-          echo "=== Checking for dist directory ==="
-          ls -la dist/ || echo "dist/ directory does not exist"
-          echo "=== Looking for .vcvplugin files ==="
-          find . -name "*.vcvplugin" || echo "No .vcvplugin files found"
-
-      - name: Debug - Check compiler (Windows)
-        if: matrix.platform == 'win-x64'
-        shell: msys2 {0}
-        run: |
-          echo "=== Checking MinGW version ==="
-          x86_64-w64-mingw32-g++ --version || echo "MinGW not found"
-          if [ -f "plugin.dll" ]; then
-            objdump -p plugin.dll | grep "DLL Name:" || echo "Could not check DLL dependencies"
-          fi
-        
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-binaries # This creates the folder name
+          name: ${{ matrix.platform }}-binaries
           path: dist/*.vcvplugin
 
   publish:
@@ -106,31 +59,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Get version from plugin.json
-        id: get_version
-        run: echo "VERSION=$(jq -r .version plugin.json)" >> $GITHUB_OUTPUT
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          # This will download ALL artifacts from the 'build' job
           path: binaries
 
-      - name: Verify and List Files
-        run: |
-          echo "=== Displaying all downloaded files ==="
-          ls -R binaries/
-
-      - name: Upload to Release
+      - name: Upload to Existing Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Cavian v${{ steps.get_version.outputs.VERSION }}
-          # The recursive wildcard '**' ensures it finds the .vcvplugin files
-          # even if they are inside subdirectories (win-x64-binaries/..., etc.)
+          # This uses the tag name you typed in when starting the workflow
+          tag_name: ${{ github.event.inputs.tag_name }}
           files: binaries/**/*.vcvplugin
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+          # This tells it: "Don't create a new one, just add to the existing one"
+          append_body: true
