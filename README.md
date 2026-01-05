@@ -19,7 +19,7 @@ In Vert mode, single clicks are used whilst on 8x8 and 1x64 single click or cont
 ### Randomization
 1. Click the **Random** button.
 2. Click any **Group**, **Preset**, or **Channel** button to randomise all steps within that target.
-* **Weighting**: Right-click the Random button to adjust the probability weight of the algorithm.  
+* **Weighting**: Right-click to activate the menu to adjust the probability weighting.  
 ![SubMenu](/images/CavianSubMenu.jpg)
 
 ### Load and Save
