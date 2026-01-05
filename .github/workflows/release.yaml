@@ -4,9 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'The tag of the release to upload to (must already exist)'
+        description: 'Tag'
         required: true
-        type: string
 
 jobs:
   build:
