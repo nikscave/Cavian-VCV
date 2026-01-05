@@ -12,10 +12,11 @@ jobs:
             platform: win
           - os: ubuntu-latest
             platform: linux
-          - os: macos-13
+          - os: macos-15-intel
             platform: mac-x64
           - os: macos-latest
             platform: mac-arm64
+
 
     runs-on: ${{ matrix.os }}
 
