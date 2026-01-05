@@ -55,6 +55,8 @@ Press <kbd>V</kbd> to cycle through display layouts:
 ---
 ## Future Features
 * **Hardware Integration**: Built-in support for a live connection with the Cavian hardware counterpart is already present in the codebase. We just need the hardware to be available :-)
+* Ignore the "Enable Hardware Sync" as only I have the software running on ESP32, so it will just time out and not do anything, this is expected behavior right now.
+
 
 ## Feedback & Support
 Cavian is in active development. If you encounter any bugs or have suggestions for new features:
