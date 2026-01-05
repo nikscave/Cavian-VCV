@@ -2,7 +2,7 @@ name: Build Cavian VCV Rack Plugin
 
 on:
   workflow_dispatch:
-  # Add these if you want automatic builds:
+  # Optional: add these for automatic builds on push/PR
   # push:
   #   branches: [ main ]
   # pull_request:
@@ -14,12 +14,12 @@ jobs:
         platform:
           - os: ubuntu-latest
             name: Linux
-          - os: macos-13      # Intel/x64 runner
+          - os: macos-15-intel   # Updated: replacement for deprecated macos-13
             name: macOS-Intel
-            sdk_arch: x64     # New: specifies SDK arch
-          - os: macos-latest  # ARM/arm64 runner
+            sdk_arch: x64
+          - os: macos-latest     # ARM runner (already future-proof)
             name: macOS-ARM
-            sdk_arch: arm64   # New: specifies SDK arch
+            sdk_arch: arm64
           - os: windows-latest
             name: Windows
     
@@ -57,7 +57,7 @@ jobs:
         run: |
           export RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
           make clean
-          make dep     # Explicit – downloads required libs like glew/glfw
+          make dep     # Explicitly fetch dependencies
           make dist
         shell: bash
       
