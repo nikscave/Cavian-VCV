@@ -39,8 +39,17 @@ jobs:
 
       - name: Download Rack SDK
         run: |
-          curl -L https://vcvrack.com/downloads/Rack-SDK-2.5.2-${{ matrix.platform }}.zip -o sdk.zip
+          curl -fL \
+            -H "User-Agent: GitHubActions" \
+            https://vcvrack.com/downloads/Rack-SDK-2.5.2-${{ matrix.platform }}.zip \
+            -o sdk.zip
           unzip sdk.zip
+
+      - name: Verify SDK contents
+        run: |
+          ls -l sdk.zip
+          ls Rack-SDK
+          test -f Rack-SDK/plugin.mk
 
       - name: Build plugin
         run: |
