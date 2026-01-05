@@ -2,6 +2,7 @@ name: Build Cavian VCV Rack Plugin
 
 on:
   workflow_dispatch:
+  # Optional: add push/pull_request triggers later if desired
 
 jobs:
   build:
@@ -10,10 +11,12 @@ jobs:
         platform:
           - os: ubuntu-latest
             name: Linux
-          - os: macos-13  # Intel runner
+          - os: macos-13      # Intel runner
             name: macOS-Intel
+            sdk_arch: x64     # Add this for Mac matrix
           - os: macos-latest  # ARM runner
             name: macOS-ARM
+            sdk_arch: arm64   # Add this for Mac matrix
           - os: windows-latest
             name: Windows
     
@@ -27,26 +30,31 @@ jobs:
       - name: Get Rack SDK (Linux)
         if: runner.os == 'Linux'
         run: |
-          wget https://vcvrack.com/downloads/Rack-SDK-2.5.2-lin-x64.zip
-          unzip Rack-SDK-2.5.2-lin-x64.zip
+          wget https://vcvrack.com/downloads/Rack-SDK-2.6.6-lin-x64.zip
+          unzip Rack-SDK-2.6.6-lin-x64.zip
       
       - name: Get Rack SDK (macOS)
         if: runner.os == 'macOS'
         run: |
-          wget https://vcvrack.com/downloads/Rack-SDK-2.5.2-mac-x64+arm64.zip
-          unzip Rack-SDK-2.5.2-mac-x64+arm64.zip
+          wget https://vcvrack.com/downloads/Rack-SDK-2.6.6-mac-${{ matrix.sdk_arch }}.zip
+          unzip Rack-SDK-2.6.6-mac-${{ matrix.sdk_arch }}.zip
       
       - name: Get Rack SDK (Windows)
         if: runner.os == 'Windows'
         run: |
-          Invoke-WebRequest -Uri "https://vcvrack.com/downloads/Rack-SDK-2.5.2-win-x64.zip" -OutFile Rack-SDK.zip
+          Invoke-WebRequest -Uri "https://vcvrack.com/downloads/Rack-SDK-2.6.6-win-x64.zip" -OutFile Rack-SDK.zip
           Expand-Archive Rack-SDK.zip -DestinationPath .
         shell: powershell
+      
+      - name: Install dependencies (macOS)  # Often needed for make dep
+        if: runner.os == 'macOS'
+        run: brew install jq
       
       - name: Build plugin
         run: |
           export RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
           make clean
+          make dep      # Explicitly run dep (downloads glew, glfw, etc.)
           make dist
         shell: bash
       
