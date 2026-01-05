@@ -4,7 +4,7 @@ CFLAGS +=
 CXXFLAGS +=
 
 # Only link ws2_32 on Windows
-ifdef ARCH_WIN
+ifeq ($(ARCH_OS), win)
 	LDFLAGS += -lws2_32
 endif
 
