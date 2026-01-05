@@ -2,7 +2,10 @@ name: Build Cavian VCV Rack Plugin
 
 on:
   workflow_dispatch:
-  # Optional: add push/pull_request triggers later if desired
+  # Add these if you want automatic builds:
+  # push:
+  #   branches: [ main ]
+  # pull_request:
 
 jobs:
   build:
@@ -11,12 +14,12 @@ jobs:
         platform:
           - os: ubuntu-latest
             name: Linux
-          - os: macos-13      # Intel runner
+          - os: macos-13      # Intel/x64 runner
             name: macOS-Intel
-            sdk_arch: x64     # Add this for Mac matrix
-          - os: macos-latest  # ARM runner
+            sdk_arch: x64     # New: specifies SDK arch
+          - os: macos-latest  # ARM/arm64 runner
             name: macOS-ARM
-            sdk_arch: arm64   # Add this for Mac matrix
+            sdk_arch: arm64   # New: specifies SDK arch
           - os: windows-latest
             name: Windows
     
@@ -46,7 +49,7 @@ jobs:
           Expand-Archive Rack-SDK.zip -DestinationPath .
         shell: powershell
       
-      - name: Install dependencies (macOS)  # Often needed for make dep
+      - name: Install jq (macOS dependency for make dep)
         if: runner.os == 'macOS'
         run: brew install jq
       
@@ -54,7 +57,7 @@ jobs:
         run: |
           export RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
           make clean
-          make dep      # Explicitly run dep (downloads glew, glfw, etc.)
+          make dep     # Explicit – downloads required libs like glew/glfw
           make dist
         shell: bash
       
