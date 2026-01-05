@@ -1,4 +1,4 @@
-name: Build Cavian VCV Rack Plugin
+name: Release Cavian VCV Rack Plugin
 
 on:
   workflow_dispatch:
