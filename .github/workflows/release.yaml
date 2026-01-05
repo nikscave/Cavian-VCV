@@ -93,13 +93,12 @@ jobs:
           if [ -f "plugin.dll" ]; then
             objdump -p plugin.dll | grep "DLL Name:" || echo "Could not check DLL dependencies"
           fi
-
-      - name: Upload artifact
+        
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-plugin
+          name: ${{ matrix.platform }}-binaries # This creates the folder name
           path: dist/*.vcvplugin
-
 
   publish:
     needs: build
@@ -117,18 +116,21 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          # This downloads all artifacts from the 'build' job into a folder named 'binaries'
+          # This will download ALL artifacts from the 'build' job
           path: binaries
-          pattern: '*-binaries' 
-          merge-multiple: true
+
+      - name: Verify and List Files
+        run: |
+          echo "=== Displaying all downloaded files ==="
+          ls -R binaries/
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.get_version.outputs.VERSION }}
           name: Cavian v${{ steps.get_version.outputs.VERSION }}
-          # This tells it to grab every .vcvplugin file found in that folder
-          files: binaries/*.vcvplugin
+          # The recursive wildcard '**' ensures it finds the .vcvplugin files
+          # even if they are inside subdirectories (win-x64-binaries/..., etc.)
+          files: binaries/**/*.vcvplugin
           generate_release_notes: true
           draft: false
           prerelease: false
