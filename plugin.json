@@ -1,20 +1,20 @@
 {
   "slug": "CavianSequencer",
-  "name": "Cavian 2 Sequencer",
+  "name": "Cavian Sequencer",
   "version": "2.0.0",
   "license": "GPL-3.0-or-later",
   "brand": "YourModulesMayVary",
   "author": "YourModulesMayVary",
   "authorEmail": "cavian@nikscave.com",
-  "pluginUrl": "",
-  "manualUrl": "",
-  "sourceUrl": "",
+  "pluginUrl": "https://github.com/nikscave/Cavian-VCV",
+  "manualUrl": "https://github.com/nikscave/Cavian-VCV",
+  "sourceUrl": "https://github.com/nikscave/Cavian-VCV",
   "donateUrl": "",
   "changelogUrl": "",
   "modules": [
     {
       "slug": "CavianSequencer",
-      "name": "Cavian 2",
+      "name": "Cavian",
       "description": "8-channel multi-step sequencer and a lot more",
       "tags": ["Sequencer", "Clock", "Trigger and Gate outputs"]
     }
