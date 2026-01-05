@@ -6,4 +6,3 @@ dist/
 *.o
 *.a
 .DS_Store
-plugin.json
