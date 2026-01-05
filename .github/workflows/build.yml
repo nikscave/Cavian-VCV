@@ -23,6 +23,17 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up MSYS2 (Windows)
+        if: matrix.platform == 'win-x64'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            unzip
+
       - name: Set up dependencies (Linux)
         if: matrix.platform == 'lin-x64'
         run: |
@@ -36,7 +47,17 @@ jobs:
             libxi-dev \
             libasound2-dev
 
-      - name: Download Rack SDK
+      - name: Download Rack SDK (Windows)
+        if: matrix.platform == 'win-x64'
+        shell: msys2 {0}
+        run: |
+          curl -fL -H "User-Agent: GitHubActions" \
+          https://vcvrack.com/downloads/Rack-SDK-2.6.6-${{ matrix.platform }}.zip \
+          -o sdk.zip
+          unzip sdk.zip
+
+      - name: Download Rack SDK (non-Windows)
+        if: matrix.platform != 'win-x64'
         shell: bash
         run: |
           curl -fL -H "User-Agent: GitHubActions" \
@@ -44,13 +65,28 @@ jobs:
           -o sdk.zip
           unzip sdk.zip
 
-      - name: Verify SDK contents
+      - name: Verify SDK contents (Windows)
+        if: matrix.platform == 'win-x64'
+        shell: msys2 {0}
         run: |
           ls -l sdk.zip
           ls Rack-SDK
           test -f Rack-SDK/plugin.mk
 
-      - name: Build plugin
+      - name: Verify SDK contents (non-Windows)
+        if: matrix.platform != 'win-x64'
+        run: |
+          ls -l sdk.zip
+          ls Rack-SDK
+          test -f Rack-SDK/plugin.mk
+
+      - name: Build plugin (Windows)
+        if: matrix.platform == 'win-x64'
+        shell: msys2 {0}
+        run: make dist RACK_DIR=Rack-SDK
+
+      - name: Build plugin (non-Windows)
+        if: matrix.platform != 'win-x64'
         run: make dist RACK_DIR=Rack-SDK
 
       - name: Debug - List files
@@ -67,7 +103,7 @@ jobs:
 
       - name: Debug - Check compiler (Windows)
         if: matrix.platform == 'win-x64'
-        shell: bash
+        shell: msys2 {0}
         run: |
           echo "=== Checking MinGW version ==="
           x86_64-w64-mingw32-g++ --version || echo "MinGW not found"
