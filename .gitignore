@@ -1,0 +1,9 @@
+build/
+dist/
+*.so
+*.dll
+*.dylib
+*.o
+*.a
+.DS_Store
+plugin.json
