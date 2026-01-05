@@ -9,9 +9,9 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            platform: win
+            platform: win-x64
           - os: ubuntu-latest
-            platform: linux
+            platform: lin-x64
           - os: macos-15-intel
             platform: mac-x64
           - os: macos-latest
@@ -41,7 +41,7 @@ jobs:
         run: |
           curl -fL \
             -H "User-Agent: GitHubActions" \
-            https://vcvrack.com/downloads/Rack-SDK-2.5.2-${{ matrix.platform }}.zip \
+            https://vcvrack.com/downloads/Rack-SDK-2.6.6-${{ matrix.platform }}.zip \
             -o sdk.zip
           unzip sdk.zip
 
