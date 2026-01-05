@@ -10,8 +10,10 @@ jobs:
         platform:
           - os: ubuntu-latest
             name: Linux
-          - os: macos-latest
-            name: macOS
+          - os: macos-13  # Intel runner
+            name: macOS-Intel
+          - os: macos-latest  # ARM runner
+            name: macOS-ARM
           - os: windows-latest
             name: Windows
     
@@ -41,16 +43,7 @@ jobs:
           Expand-Archive Rack-SDK.zip -DestinationPath .
         shell: powershell
       
-      - name: Build plugin (macOS universal)
-        if: runner.os == 'macOS'
-        run: |
-          export RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
-          make clean
-          make dist ARCH="x64 arm64"
-        shell: bash
-      
-      - name: Build plugin (Linux/Windows)
-        if: runner.os != 'macOS'
+      - name: Build plugin
         run: |
           export RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
           make clean
