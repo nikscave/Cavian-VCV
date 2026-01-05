@@ -10,12 +10,10 @@ jobs:
         platform:
           - os: ubuntu-latest
             name: Linux
-          - os: macos-15-intel   # Intel/x64 runner (future-proof replacement)
+          - os: macos-15-intel   # Intel/x64 runner
             name: macOS-Intel
-            sdk_arch: x64
           - os: macos-latest     # ARM/arm64 runner
             name: macOS-ARM
-            sdk_arch: arm64
           - os: windows-latest
             name: Windows
     
@@ -32,9 +30,17 @@ jobs:
           wget https://vcvrack.com/downloads/Rack-SDK-2.6.6-lin-x64.zip
           unzip Rack-SDK-2.6.6-lin-x64.zip
       
-      - name: Get Rack SDK (macOS)
-        if: runner.os == 'macOS'
-        run: wget https://vcvrack.com/downloads/Rack-SDK-2.6.6-mac-${{ matrix.sdk_arch }}.zip && unzip Rack-SDK-2.6.6-mac-${{ matrix.sdk_arch }}.zip
+      - name: Get Rack SDK (macOS-Intel)
+        if: matrix.platform.name == 'macOS-Intel'
+        run: |
+          wget https://vcvrack.com/downloads/Rack-SDK-2.6.6-mac-x64.zip
+          unzip Rack-SDK-2.6.6-mac-x64.zip
+      
+      - name: Get Rack SDK (macOS-ARM)
+        if: matrix.platform.name == 'macOS-ARM'
+        run: |
+          wget https://vcvrack.com/downloads/Rack-SDK-2.6.6-mac-arm64.zip
+          unzip Rack-SDK-2.6.6-mac-arm64.zip
       
       - name: Get Rack SDK (Windows)
         if: runner.os == 'Windows'
