@@ -3846,18 +3846,21 @@ struct CavianSequencerWidget : ModuleWidget {
             module, 
             CavianSequencer::BPM_PARAM
         ));
+		
 		// Run/Stop Display
+		if (module){
 		RunStopDisplay* runDisp = new RunStopDisplay();
 		runDisp->module = module;
 		runDisp->box.pos = mm2px(Vec(105, 6));
 		addChild(runDisp);
-		
+		}
 
+	if (module){
 		VerticalViewDisplay* vertDisp = new VerticalViewDisplay();
 		vertDisp->module = module;
 		vertDisp->box.pos = mm2px(Vec(6, 116));  
 		addChild(vertDisp);	
-
+	}
         // ===================================================================
         // BOTTOM SECTION - Inputs and master clock
         
@@ -3884,11 +3887,12 @@ struct CavianSequencerWidget : ModuleWidget {
         ));
 			
 				// ESP32 Status Display (bottom right)
+					if (module){
 		ESP32StatusDisplay* esp32Status = new ESP32StatusDisplay();
 		esp32Status->module = module;
 		esp32Status->box.pos = mm2px(Vec(102, 118)); // Bottom right area
 		addChild(esp32Status);
-
+					}
 
         // ===================================================================
         // NAVIGATION SECTION - Group/Preset/Channel
