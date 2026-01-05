@@ -65,6 +65,17 @@ jobs:
           echo "=== Looking for .vcvplugin files ==="
           find . -name "*.vcvplugin" || echo "No .vcvplugin files found"
 
+      - name: Debug - Check compiler (Windows)
+        if: matrix.platform == 'win-x64'
+        shell: bash
+        run: |
+          echo "=== Checking MinGW version ==="
+          x86_64-w64-mingw32-g++ --version || echo "MinGW not found"
+          echo "=== Checking for DLL dependencies ==="
+          if [ -f "plugin.dll" ]; then
+            objdump -p plugin.dll | grep "DLL Name:" || echo "Could not check DLL dependencies"
+          fi
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
