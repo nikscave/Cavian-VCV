@@ -38,13 +38,12 @@ jobs:
             libasound2-dev
 
       - name: Download Rack SDK
+        shell: bash
         run: |
-          curl -fL \
-            -H "User-Agent: GitHubActions" \
-            https://vcvrack.com/downloads/Rack-SDK-2.6.6-${{ matrix.platform }}.zip \
-            -o sdk.zip
+          curl -fL -H "User-Agent: GitHubActions" \
+          https://vcvrack.com/downloads/Rack-SDK-2.6.6-${{ matrix.platform }}.zip \
+          -o sdk.zip
           unzip sdk.zip
-
       - name: Verify SDK contents
         run: |
           ls -l sdk.zip
