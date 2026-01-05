@@ -3960,7 +3960,7 @@ addChild(gridContainer);
 FramebufferWidget* gridFramebuffer = new FramebufferWidget();
 gridFramebuffer->box.pos = Vec(0, 0);
 gridFramebuffer->box.size = gridContainer->box.size;
-gridFramebuffer->oversample = std::max(1.f, args.viewport.devicePixelRatio);
+gridFramebuffer->oversample = 1.0f;
 gridContainer->addChild(gridFramebuffer);
 
 
