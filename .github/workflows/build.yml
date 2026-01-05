@@ -55,6 +55,7 @@ jobs:
 
       - name: Debug - List files
         if: always()
+        shell: bash
         run: |
           echo "=== Current directory ==="
           pwd
