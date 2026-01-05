@@ -32,6 +32,7 @@ jobs:
           install: >-
             base-devel
             mingw-w64-x86_64-toolchain
+            jq
 
       - name: Set up dependencies (Linux)
         if: matrix.platform == 'lin-x64'
