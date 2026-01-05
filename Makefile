@@ -3,11 +3,12 @@ FLAGS +=
 CFLAGS +=
 CXXFLAGS +=
 
-# Only link ws2_32 on Windows
-ifeq ($(ARCH_OS), win)
-	LDFLAGS += -lws2_32
-endif
-
 SOURCES += $(wildcard src/*.cpp)
 DISTRIBUTABLES += res
+
 include $(RACK_DIR)/plugin.mk
+
+# Add Windows socket library after plugin.mk sets ARCH_WIN
+ifdef ARCH_WIN
+	LDFLAGS += -lws2_32
+endif
