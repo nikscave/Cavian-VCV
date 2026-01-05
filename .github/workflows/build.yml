@@ -39,9 +39,8 @@ jobs:
 
       - name: Download Rack SDK
         run: |
-          curl -L https://vcvrack.com/downloads/Rack-SDK-2.6.6-${{ matrix.platform }}.zip -o sdk.zip
+          curl -L https://vcvrack.com/downloads/Rack-SDK-2.5.2-${{ matrix.platform }}.zip -o sdk.zip
           unzip sdk.zip
-          mv Rack-SDK-* Rack-SDK
 
       - name: Build plugin
         run: |
