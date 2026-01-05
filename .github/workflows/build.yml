@@ -2,10 +2,6 @@ name: Build Cavian VCV Rack Plugin
 
 on:
   workflow_dispatch:
-  # Optional: add these for automatic builds on push/PR
-  # push:
-  #   branches: [ main ]
-  # pull_request:
 
 jobs:
   build:
@@ -14,10 +10,10 @@ jobs:
         platform:
           - os: ubuntu-latest
             name: Linux
-          - os: macos-15-intel   # Updated: replacement for deprecated macos-13
+          - os: macos-15-intel   # Intel/x64 runner (future-proof replacement)
             name: macOS-Intel
             sdk_arch: x64
-          - os: macos-latest     # ARM runner (already future-proof)
+          - os: macos-latest     # ARM/arm64 runner
             name: macOS-ARM
             sdk_arch: arm64
           - os: windows-latest
@@ -38,9 +34,7 @@ jobs:
       
       - name: Get Rack SDK (macOS)
         if: runner.os == 'macOS'
-        run: |
-          wget https://vcvrack.com/downloads/Rack-SDK-2.6.6-mac-${{ matrix.sdk_arch }}.zip
-          unzip Rack-SDK-2.6.6-mac-${{ matrix.sdk_arch }}.zip
+        run: wget https://vcvrack.com/downloads/Rack-SDK-2.6.6-mac-${{ matrix.sdk_arch }}.zip && unzip Rack-SDK-2.6.6-mac-${{ matrix.sdk_arch }}.zip
       
       - name: Get Rack SDK (Windows)
         if: runner.os == 'Windows'
@@ -57,7 +51,7 @@ jobs:
         run: |
           export RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
           make clean
-          make dep     # Explicitly fetch dependencies
+          make dep
           make dist
         shell: bash
       
