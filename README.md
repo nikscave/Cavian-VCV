@@ -12,7 +12,8 @@ I have the prototype working, just not finished the PCB design yet but it's comi
 ## Logic & Editing Operations
 
 In it's simplest form, use Cavian to send gates or triggers (click once for Step, and again for a Gate, once more to turn off) on it's 8 outputs.
-It can get as complex as you need it to be by chaining your 8 channels into 8 presets then 8 Groups.
+It can get as complex as you need it to be by chaining your 8 channels into 8 presets then 8 Groups.  
+Single click or continue to drag the mouse around the grid to create your patterns. Each mouse drag will only affect the same step once.
 
 
 ### Randomization
@@ -43,6 +44,8 @@ Use the "Hold + Number" method to quickly navigate the engine:
 * <kbd>G</kbd> + <kbd>1</kbd>–<kbd>8</kbd> : Switch **Group**
 * <kbd>P</kbd> + <kbd>1</kbd>–<kbd>8</kbd> : Switch **Preset**
 * <kbd>C</kbd> + <kbd>1</kbd>–<kbd>8</kbd> : Switch **Channel**
+
+Changing Groups/Presets/Channels on 8x8 or 1x64 view mode only really makes sense for live jams, so I opted for only keyboard actions for these views to simplify the UI.  
 
 ### View Modes
 Press <kbd>V</kbd> to cycle through display layouts:
