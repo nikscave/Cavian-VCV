@@ -1,6 +1,7 @@
 # Cavian Sequencer
 
-Cavian is a powerful 8-channel multi-step sequencer for VCV Rack.  
+Cavian is a powerful 8-channel multi-step sequencer for VCV Rack. 8 channels, 8 presets and 8 group that can be looped as required.
+Trigger and Gate output only.  
 A Eurorack Hardware version is in the works and as that will be based on ESP32 controller, your patterns generated on VCV can be saved to the external module and vice versa through your own wifi or via hotspot via the ESP32.
 I have the prototype working, just not finished the PCB design yet but it's coming 2026.  
 (Influenced by the Circadian Rhythm Gate and Trigger Sequence)
