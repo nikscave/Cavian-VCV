@@ -78,3 +78,6 @@ Cavian is in active development. If you encounter any bugs or have suggestions f
 Follow me on Instagram: [![Instagram](https://img.shields.io/badge/@yourmodulesmayvary-%23E4405F.svg?style=flat&logo=Instagram&logoColor=white)](https://www.instagram.com/yourmodulesmayvary)
 
 *Thank you for supporting YourModulesMayVary!*
+
+![Downloads](https://img.shields.io/github/downloads/nikscave/Cavian-VCV/total?style=for-the-badge&color=blue)
+
