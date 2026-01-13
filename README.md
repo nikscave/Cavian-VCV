@@ -1,3 +1,5 @@
+Jan 2026 Update - this is currently in Beta, once all good, will be submitting to VCV repo.
+
 # Cavian Sequencer
 
 Cavian is a powerful 8-channel multi-step sequencer for VCV Rack. 8 channels, 8 presets and 8 group that can be looped as required.
