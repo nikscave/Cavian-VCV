@@ -45,7 +45,10 @@ jobs:
             libxinerama-dev \
             libxcursor-dev \
             libxi-dev \
-            libasound2-dev
+            libasound2-dev \
+            libudev-dev \
+            libfontconfig1-dev \
+            libssl-dev
 
       - name: Download Rack SDK
         shell: bash

@@ -1,0 +1,66 @@
+name: Test Linux Plugin Dependencies
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-dependencies:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libasound2-dev \
+            libudev-dev \
+            libfontconfig1-dev \
+            libssl-dev
+
+      - name: Download Rack SDK
+        run: |
+          curl -fL -H "User-Agent: GitHubActions" \
+          https://vcvrack.com/downloads/Rack-SDK-2.6.6-lin-x64.zip \
+          -o sdk.zip
+          unzip sdk.zip
+
+      - name: Build plugin
+        run: make dist RACK_DIR=Rack-SDK
+
+      - name: Check plugin dependencies
+        run: |
+          echo "=== Plugin file info ==="
+          ls -lh dist/*.vcvplugin
+
+          echo ""
+          echo "=== Extracting plugin ==="
+          cd dist
+          unzip -o *.vcvplugin
+          ls -la
+
+          echo ""
+          echo "=== Checking plugin.so dependencies ==="
+          if [ -f "plugin.so" ]; then
+            ldd plugin.so 2>&1 | grep -E "not found|=>"
+            echo ""
+            echo "=== All dependencies ==="
+            ldd plugin.so
+          else
+            echo "plugin.so not found!"
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-dependency-test
+          path: dist/

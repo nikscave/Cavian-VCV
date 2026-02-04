@@ -12,3 +12,8 @@ include $(RACK_DIR)/plugin.mk
 ifdef ARCH_WIN
 	LDFLAGS := $(filter-out -lpthread,$(LDFLAGS)) -Wl,-Bstatic -l:libpthread.a -Wl,-Bdynamic -lws2_32
 endif
+
+# Linux-specific linking for HTTP/TLS support
+ifdef ARCH_LIN
+	LDFLAGS += -lpthread -lssl -lcrypto
+endif
