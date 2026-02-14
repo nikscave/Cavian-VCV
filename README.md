@@ -50,6 +50,10 @@ Use the "Hold + Number" method to quickly navigate the engine:
 
 Changing Groups/Presets/Channels on 8x8 or 1x64 view mode only really makes sense for live jams, so I opted for only keyboard actions for these views to simplify the UI.  
 
+### Looping
+Set Loops button - when pressed the Group and Preset Column can be toggled. Those in yellow will be looped when the   
+Group or Preset looping button is pressed (once set loops is pressed again). Turning 8 steps into however many you need up to 8x8x8 steps.
+
 ### View Modes
 Press <kbd>V</kbd> to cycle through display layouts:
 * **Vertical**: Standard channel strip view.
