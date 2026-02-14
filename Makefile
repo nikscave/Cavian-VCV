@@ -7,11 +7,11 @@ DISTRIBUTABLES += res
 
 include $(RACK_DIR)/plugin.mk
 
-# Add libraries AFTER plugin.mk (it might clear LDFLAGS before)
+# Add libraries AFTER plugin.mk
 ifdef ARCH_WIN
 	LDFLAGS += -lws2_32
 endif
 
 ifdef ARCH_LIN
-	LDFLAGS += -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lpthread
+	LDFLAGS += -lpthread
 endif
