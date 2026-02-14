@@ -1,4 +1,4 @@
-Jan 2026 Update - this is currently in Beta, once all good, will be submitting to VCV repo.
+Feb 2026 Update - this version now in the queue for acceptance into the VCV rack library!
 
 # Cavian Sequencer
 
