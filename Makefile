@@ -5,14 +5,13 @@ CXXFLAGS +=
 SOURCES += $(wildcard src/*.cpp)
 DISTRIBUTABLES += res
 
-# Windows-specific linking for sockets
+include $(RACK_DIR)/plugin.mk
+
+# Add libraries AFTER plugin.mk (it might clear LDFLAGS before)
 ifdef ARCH_WIN
 	LDFLAGS += -lws2_32
 endif
 
-# Linux-specific linking for HTTP/TLS support
 ifdef ARCH_LIN
 	LDFLAGS += -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lpthread
 endif
-
-include $(RACK_DIR)/plugin.mk
