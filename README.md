@@ -32,6 +32,7 @@ Right click and the menu options will be obvious. Everything in VCV is saved loc
 These functions operate with the same "Select Action → Select Target" workflow:
 1. Click **Copy**, then click your source (Group/Preset/Channel).
 2. Click **Paste**, then click your destination.
+3. repeat by hitting paste again followed by the destination.   
 
 ---
 
