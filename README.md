@@ -1,5 +1,5 @@
-Feb 2026 Update - this version now in the queue for acceptance into the VCV rack library!
-
+[Feb 2026 - Now available for download in the VCV rack library!
+](https://library.vcvrack.com/CavianSequencer/CavianSequencer)
 # Cavian Sequencer
 
 Cavian is a powerful 8-channel multi-step sequencer for VCV Rack. 8 channels, 8 presets and 8 group that can be looped as required.
