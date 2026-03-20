@@ -4079,7 +4079,7 @@ struct ZoomedSwingOverlay : TransparentWidget {
 
         // Title
         nvgFontSize(args.vg, 7);
-        nvgFontFaceId(args.vg, app::Font::getDefault()->handle);
+        nvgFontFaceId(args.vg, APP->window->uiFont->handle);
         nvgFillColor(args.vg, CLR_WHITE);
         nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
         nvgText(args.vg, box.size.x / 2, 3, "SWING", NULL);
@@ -4139,7 +4139,7 @@ struct ZoomedSwingOverlay : TransparentWidget {
 
         // Value text
         nvgFontSize(args.vg, 10);
-        nvgFontFaceId(args.vg, app::Font::getDefault()->handle);
+        nvgFontFaceId(args.vg, APP->window->uiFont->handle);
         nvgFillColor(args.vg, CLR_WHITE);
         nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         char valueStr[16];
@@ -4630,7 +4630,6 @@ void step() override {
                 // Position overlay near mouse cursor - use edit row position
                 // For now, position near the grid
                 zso->box.pos = mm2px(Vec(45, 45)); // Center of grid
-                zso->dirty = true;
             }
         }
     }
