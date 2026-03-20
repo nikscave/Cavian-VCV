@@ -133,8 +133,140 @@ struct ClickableCircleDisplay : Widget {
             pressed = false;
         }
     }
-    
     void draw(const DrawArgs& args) override;
+};
+
+// ============================================================================
+// SWING CELL WIDGET - Horizontal bar showing swing value
+// ============================================================================
+struct SwingCell : Widget {
+    CavianSequencer* module;
+    int row;    // preset (0-7)
+    int col;    // step (0-7)
+
+    bool isDragging = false;
+    float dragStartX = 0;
+    int8_t originalValue = 0;
+
+    SwingCell() {
+        box.size = mm2px(Vec(11, 11));
+    }
+
+    void onButton(const event::Button& e) override {
+        if (!module || e.button != GLFW_MOUSE_BUTTON_LEFT) return;
+
+        if (e.action == GLFW_PRESS) {
+            // Single click - select row for editing
+            module->swingEditRow = row;
+            if (module->gridFramebuffer) {
+                module->gridFramebuffer->dirty = true;
+            }
+            e.consume(this);
+        } else if (e.action == GLFW_RELEASE) {
+            isDragging = false;
+        }
+    }
+
+    void onDragStart(const event::DragStart& e) override {
+        if (!module) return;
+        isDragging = true;
+        originalValue = module->swingFlat[module->activeGroup][row][module->activeChannel][col];
+    }
+
+    void onDragMove(const event::DragMove& e) override {
+        if (!module || !isDragging) return;
+
+        // Convert drag delta to swing value (-50 to +50)
+        float deltaX = e.mouseDelta.x;
+        // Scale: ~100 pixels = full range
+        int8_t newValue = originalValue + (int8_t)(deltaX / 2.0f);
+
+        // Clamp to valid range
+        if (newValue > 50) newValue = 50;
+        if (newValue < -50) newValue = -50;
+
+        module->swingFlat[module->activeGroup][row][module->activeChannel][col] = newValue;
+
+        if (module->gridFramebuffer) {
+            module->gridFramebuffer->dirty = true;
+        }
+    }
+
+    void onDragEnd(const event::DragEnd& e) override {
+        isDragging = false;
+    }
+
+    void onDoubleClick(const event::DoubleClick& e) override {
+        if (!module) return;
+        // Double-click to reset this preset's swing to defaults
+        module->resetSwingPreset(row);
+        if (module->gridFramebuffer) {
+            module->gridFramebuffer->dirty = true;
+        }
+    }
+
+    void draw(const DrawArgs& args) override {
+        if (!module) return;
+
+        int8_t swingValue = module->swingFlat[module->activeGroup][row][module->activeChannel][col];
+        bool isSelected = (module->swingEditRow == row);
+        bool isModified = module->isSwingModified(row);
+
+        // Background
+        NVGcolor bgColor = isSelected ? nvgRGBA(40, 40, 60, 255) : CLR_INACTIVE;
+        if (isModified) {
+            bgColor = nvgRGBA(30, 35, 45, 255); // Slightly different when modified
+        }
+        nvgFillColor(args.vg, bgColor);
+        nvgBeginPath(args.vg);
+        nvgRect(args.vg, 0, 0, box.size.x, box.size.y);
+        nvgFill(args.vg);
+
+        // Border for selected row
+        if (isSelected) {
+            nvgStrokeColor(args.vg, CLR_CYAN);
+            nvgStrokeWidth(args.vg, 1.5f);
+            nvgStroke(args.vg);
+        }
+
+        // If swing is 0 and not modified, show template as reference
+        if (swingValue == 0 && !isModified) {
+            // Show template reference - get template from column index
+            int8_t templateValue = module->swingTemplates[col][col]; // Use col as template index
+            if (templateValue != 0) {
+                // Draw reference bar (dimmer)
+                float barWidth = 4.0f;
+                float centerX = box.size.x / 2;
+                float offsetX = (templateValue / 50.0f) * (box.size.x / 2 - barWidth);
+
+                nvgFillColor(args.vg, nvgRGBA(100, 100, 100, 180));
+                nvgBeginPath(args.vg);
+                nvgRect(args.vg, centerX + offsetX - barWidth/2, 2, barWidth, box.size.y - 4);
+                nvgFill(args.vg);
+            }
+        } else {
+            // Draw actual swing value bar
+            float barWidth = 6.0f;
+            float centerX = box.size.x / 2;
+            float offsetX = (swingValue / 50.0f) * (box.size.x / 2 - barWidth/2);
+
+            // Color based on value
+            NVGcolor barColor = swingValue > 0 ? CLR_GREEN :
+                               swingValue < 0 ? CLR_ORANGE : CLR_GRAY;
+            nvgFillColor(args.vg, barColor);
+            nvgBeginPath(args.vg);
+            nvgRect(args.vg, centerX + offsetX - barWidth/2, 2, barWidth, box.size.y - 4);
+            nvgFill(args.vg);
+        }
+
+        // Draw center line (0 position)
+        nvgStrokeColor(args.vg, nvgRGBA(100, 100, 100, 100));
+        nvgStrokeWidth(args.vg, 1.0f);
+        nvgBeginPath(args.vg);
+        nvgMoveTo(args.vg, box.size.x / 2, 0);
+        nvgLineTo(args.vg, box.size.x / 2, box.size.y);
+        nvgStroke(args.vg);
+    }
 };
 
 
@@ -301,6 +433,7 @@ struct CavianSequencer : Module {
         SWING_CASCADE_GROUP_PARAM,
         SWING_RANDOMIZE_PARAM,
         STEP_TYPE_PARAM,
+        SWING_VIEW_PARAM,
         PARAMS_LEN
     };
     enum InputId {
@@ -372,7 +505,11 @@ float secondsPerStep = 0.f;
     bool groupLoopEnabled = false;
     bool presetLoopEnabled = false;
     bool setLoopEnabled = false;
-    
+
+    // Swing view mode (only in 64 view)
+    bool swingViewEnabled = false;
+    int swingEditRow = -1; // Which row (preset) is being edited
+
 	uint8_t groupLoopArray[8] = {1,1,1,1,0,0,0,0};
 uint8_t presetLoopArray[8][8] = {{1,1,1,1,1,1,1,1},
                                 {1,1,1,1,1,1,1,1},
@@ -426,7 +563,8 @@ uint8_t presetLoopArray[8][8] = {{1,1,1,1,1,1,1,1},
     dsp::SchmittTrigger swingTemplateTriggers[8];
     dsp::SchmittTrigger swingCascadePresetTrigger, swingCascadeGroupTrigger;
     dsp::SchmittTrigger swingRandomizeTrigger;
-    
+    dsp::SchmittTrigger swingViewTrigger;
+
     float gatePulseTime[8] = {0.f};
     float swingDelay[8] = {0.f};
     bool pendingGate[8] = {false};
@@ -476,6 +614,7 @@ FramebufferWidget* gridFramebuffer = nullptr;
         
         configParam(BPM_PARAM, 1.f, 400.f, 120.f, "BPM");
         configParam(STEP_TYPE_PARAM, 0.f, 1.f, 0.f, "Step Type Mode");
+        configParam(SWING_VIEW_PARAM, 0.f, 1.f, 0.f, "Swing View Toggle");
         configButton(RUN_PARAM, "Run");
         
 
@@ -704,6 +843,20 @@ lights[SWING_MODE_LIGHT_AMBER].setBrightness(swingGlobalMode ? 0.f : 1.f);
             swingGlobalMode = !swingGlobalMode;
         }
        lights[SWING_MODE_LIGHT].setBrightness(swingGlobalMode ? 1.f : 0.f);
+
+        // === SWING VIEW TOGGLE (only in 64 mode) ===
+        if (viewMode == HORIZONTAL_64) {
+            if (swingViewTrigger.process(params[SWING_VIEW_PARAM].getValue())) {
+                swingViewEnabled = !swingViewEnabled;
+                swingEditRow = -1; // Clear selection when toggling
+            }
+        } else {
+            // Disable swing view when leaving 64 mode
+            if (swingViewEnabled) {
+                swingViewEnabled = false;
+                swingEditRow = -1;
+            }
+        }
 
         // === SWING TEMPLATES ===
         for (int i = 0; i < 8; i++) {
@@ -1159,6 +1312,22 @@ uint8_t cycleStepValue(uint8_t currentValue) {
     }
 }
 
+// Check if swing values for a preset have been modified from defaults
+bool isSwingModified(int preset) {
+    for (int step = 0; step < 8; step++) {
+        if (swingFlat[activeGroup][preset][activeChannel][step] != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Reset swing for a preset to defaults
+void resetSwingPreset(int preset) {
+    for (int step = 0; step < 8; step++) {
+        swingFlat[activeGroup][preset][activeChannel][step] = 0;
+    }
+}
 
 //new check for esp32 bool status
 void checkESP32Connection() {
@@ -4006,6 +4175,22 @@ for (int i = 0; i < 64; i++) {
     gridFramebuffer->addChild(btn);
 }
 
+// Add swing cells (hidden by default, shown in swing view mode)
+for (int i = 0; i < 64; i++) {
+    SwingCell* swingCell = new SwingCell();
+    swingCell->module = module;
+    swingCell->row = i / 8;
+    swingCell->col = i % 8;
+    swingCell->box.pos = mm2px(Vec(
+        glowPadding + swingCell->col * buttonSpacing,
+        glowPadding + swingCell->row * buttonSpacing
+    ));
+    // Initially hidden - will be shown via Z-order when swing view enabled
+    swingCell->visible = false;
+    swingCell->id = 1000 + i; // ID for toggling visibility
+    gridFramebuffer->addChild(swingCell);
+}
+
 struct AnimationOverlay : TransparentWidget {
     CavianSequencer* module;
     
@@ -4199,14 +4384,29 @@ void onHoverKey(const event::HoverKey& e) override {
 	
 void step() override {
     ModuleWidget::step();
-    
+
     CavianSequencer* m = dynamic_cast<CavianSequencer*>(module);
-    if (!m) return;
-    
-    // Force continuous updates when sequencer is running to show current step animation
-  //  if (m->running && m->gridFramebuffer) {
-  //      m->gridFramebuffer->dirty = true;
-  //  }
+    if (!m || !m->gridFramebuffer) return;
+
+    // Toggle swing cells visibility based on swingViewEnabled
+    bool showSwingCells = m->swingViewEnabled && (m->viewMode == CavianSequencer::HORIZONTAL_64);
+
+    // Toggle visibility of CavianButton vs SwingCell
+    for (Widget* child : m->gridFramebuffer->children) {
+        SwingCell* sc = dynamic_cast<SwingCell*>(child);
+        if (sc) {
+            // This is a SwingCell
+            child->visible = showSwingCells;
+        } else if (child->id < 1000) {
+            // CavianButton or other widget - hide in swing mode
+            child->visible = !showSwingCells;
+        }
+    }
+
+    // Force redraw when toggling or when editing
+    if (showSwingCells || m->swingEditRow >= 0) {
+        m->gridFramebuffer->dirty = true;
+    }
 }
 
 
@@ -4252,6 +4452,26 @@ void appendContextMenu(Menu* menu) override {
 		[=]() { return module->params[CavianSequencer::STEP_TYPE_PARAM].getValue() > 0.5f; },
 		[=]() { module->params[CavianSequencer::STEP_TYPE_PARAM].setValue(1.f); }
 	));
+
+	menu->addChild(new MenuSeparator);
+
+	// Swing View toggle (only works in 64 view mode)
+	if (module->viewMode == CavianSequencer::HORIZONTAL_64) {
+		menu->addChild(createCheckMenuItem("Swing View (edit per-preset swing)",
+			"",
+			[=]() { return module->swingViewEnabled; },
+			[=]() { module->params[CavianSequencer::SWING_VIEW_PARAM].setValue(module->swingViewEnabled ? 0.f : 1.f); }
+		));
+
+		if (module->swingViewEnabled && module->swingEditRow >= 0) {
+			menu->addChild(createMenuLabel(string::f("Editing Preset %d swing", module->swingEditRow)));
+			menu->addChild(createMenuItem("Reset this preset swing", "", [=]() {
+				module->resetSwingPreset(module->swingEditRow);
+			}));
+		}
+	} else {
+		menu->addChild(createMenuLabel("Swing View (64 mode only)"));
+	}
 
 	menu->addChild(new MenuSeparator);
     //menu->addChild(createMenuLabel("External SYNC"));
