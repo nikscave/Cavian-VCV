@@ -961,6 +961,7 @@ lights[SWING_MODE_LIGHT_AMBER].setBrightness(swingGlobalMode ? 0.f : 1.f);
 		json_object_set_new(rootJ, "esp32IP", json_string(esp32IP.c_str()));
 		
 		json_object_set_new(rootJ, "randomWeight", json_real(randomWeight));
+		json_object_set_new(rootJ, "swingViewEnabled", json_boolean(swingViewEnabled));
         return rootJ;
     }
 	
@@ -992,7 +993,13 @@ void dataFromJson(json_t* rootJ) override {
 	
 	    json_t* rndJ = json_object_get(rootJ, "randomWeight");
     if (rndJ) randomWeight = json_real_value(rndJ);
-	
+
+		json_t* swingViewJ = json_object_get(rootJ, "swingViewEnabled");
+		if (swingViewJ) {
+			swingViewEnabled = json_boolean_value(swingViewJ);
+			params[SWING_VIEW_PARAM].setValue(swingViewEnabled ? 1.f : 0.f);
+		}
+
     }
 
 
@@ -3913,12 +3920,13 @@ struct SwingCell : Widget {
             nvgStroke(args.vg);
         }
 
-        // If swing is 0 and not modified, show template as reference
+        // If swing is 0 and not modified, show template as reference based on row (preset)
         if (swingValue == 0 && !isModified) {
-            // Show template reference - get template from column index
-            int8_t templateValue = module->swingTemplates[col][col]; // Use col as template index
+            // Show template reference - use row (preset) as template index
+            // Each preset row shows its corresponding template pattern
+            int8_t templateValue = module->swingTemplates[row][col];
             if (templateValue != 0) {
-                // Draw reference bar (dimmer)
+                // Draw reference bar (dimmer) - show the template pattern
                 float barWidth = 4.0f;
                 float centerX = box.size.x / 2;
                 float offsetX = (templateValue / 50.0f) * (box.size.x / 2 - barWidth);
@@ -3928,6 +3936,7 @@ struct SwingCell : Widget {
                 nvgRect(args.vg, centerX + offsetX - barWidth/2, 2, barWidth, box.size.y - 4);
                 nvgFill(args.vg);
             }
+            // If template is 0, just show empty center (Straight template = no swing)
         } else {
             // Draw actual swing value bar
             float barWidth = 6.0f;
@@ -4461,7 +4470,11 @@ void appendContextMenu(Menu* menu) override {
 		menu->addChild(createCheckMenuItem("Swing View (edit per-preset swing)",
 			"",
 			[=]() { return module->swingViewEnabled; },
-			[=]() { module->params[CavianSequencer::SWING_VIEW_PARAM].setValue(module->swingViewEnabled ? 0.f : 1.f); }
+			[=]() {
+				module->swingViewEnabled = !module->swingViewEnabled;
+				module->params[CavianSequencer::SWING_VIEW_PARAM].setValue(module->swingViewEnabled ? 1.f : 0.f);
+				module->swingEditRow = -1;
+			}
 		));
 
 		if (module->swingViewEnabled && module->swingEditRow >= 0) {
