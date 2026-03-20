@@ -3895,8 +3895,16 @@ struct SwingCell : Widget {
         if (!module || e.button != GLFW_MOUSE_BUTTON_LEFT) return;
 
         if (e.action == GLFW_PRESS) {
-            // Single click - select row for editing
+            // Single click - select row for editing AND apply template pattern
             module->swingEditRow = row;
+
+            // Apply the template pattern for this row (preset) to swing values
+            // This makes the swing "active" - the pattern will now affect timing
+            for (int step = 0; step < 8; step++) {
+                module->swingFlat[module->activeGroup][row][module->activeChannel][step] =
+                    module->swingTemplates[row][step];
+            }
+
             if (module->gridFramebuffer) {
                 module->gridFramebuffer->dirty = true;
             }
