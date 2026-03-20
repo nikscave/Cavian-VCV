@@ -2229,11 +2229,16 @@ struct GroupChannelDisplay : Widget {
     CavianSequencer* module;
 
     GroupChannelDisplay() {
-        box.size = mm2px(Vec(25, 4));
+        box.size = mm2px(Vec(22, 4));
     }
 
     void draw(const DrawArgs& args) override {
         if (!module) return;
+
+        // Only show in 8x8 and 64 views, not vertical
+        if (module->viewMode == CavianSequencer::VERTICAL) {
+            return;
+        }
 
         // Background
         nvgFillColor(args.vg, CLR_INACTIVE);
@@ -2241,11 +2246,26 @@ struct GroupChannelDisplay : Widget {
         nvgRect(args.vg, 0, 0, box.size.x, box.size.y);
         nvgFill(args.vg);
 
-        // Text
-        std::string text = string::f("G%d CH%d", module->activeGroup + 1, module->activeChannel + 1);
+        // Text depends on view mode
+        std::string text;
+        if (module->viewMode == CavianSequencer::HORIZONTAL_8X8) {
+            // 8x8 view: show group and preset
+            text = string::f("G%d P%d", module->activeGroup + 1, module->activePreset + 1);
+        } else {
+            // 64 view: show group and channel
+            text = string::f("G%d CH%d", module->activeGroup + 1, module->activeChannel + 1);
+        }
+
+        // If in swing view mode, add indicator
+        if (module->swingViewEnabled && module->viewMode == CavianSequencer::HORIZONTAL_64) {
+            text = "SWING " + text;
+            nvgFillColor(args.vg, CLR_GREEN);  // Green text for swing mode
+        } else {
+            nvgFillColor(args.vg, CLR_WHITE);
+        }
+
         nvgFontSize(args.vg, 8);
         nvgFontFaceId(args.vg, APP->window->uiFont->handle);
-        nvgFillColor(args.vg, CLR_WHITE);
         nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgText(args.vg, box.size.x / 2, box.size.y / 2, text.c_str(), NULL);
     }
@@ -4103,7 +4123,7 @@ struct CavianSequencerWidget : ModuleWidget {
 		if (module) {
 			GroupChannelDisplay* gcDisp = new GroupChannelDisplay();
 			gcDisp->module = module;
-			gcDisp->box.pos = mm2px(Vec(16.5, 18));  // Below BPM knob
+			gcDisp->box.pos = mm2px(Vec(58, 10));  // Above column 5, higher up
 			addChild(gcDisp);
 		}
 
