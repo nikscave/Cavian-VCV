@@ -4060,7 +4060,7 @@ struct ZoomedSwingOverlay : TransparentWidget {
     void step() override {
         // Follow mouse position when dragging
         if (module && module->swingDragging && APP->window) {
-            Vec mousePos = APP->event->getMousePos();
+            Vec mousePos = APP->window->mousePos;
             // Offset so it appears near cursor but not blocking
             box.pos = mousePos.plus(Vec(-60, -80));
         }
