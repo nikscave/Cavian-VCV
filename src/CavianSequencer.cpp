@@ -4106,10 +4106,7 @@ addChild(loopStatus);
 		
     } // end of constructor
 	
-	
-	
-// In your CavianSequencerWidget class
-// In your CavianSequencerWidget class
+// In CavianSequencerWidget class
 void onHoverKey(const event::HoverKey& e) override {
     if (e.action == GLFW_PRESS && module) {
         // Cast to your specific module type
@@ -4176,7 +4173,6 @@ void onHoverKey(const event::HoverKey& e) override {
     ModuleWidget::onHoverKey(e);
 }
 	
-	// Add this method to CavianSequencerWidget class
 void step() override {
     ModuleWidget::step();
     
@@ -4216,9 +4212,8 @@ void appendContextMenu(Menu* menu) override {
     menu->addChild(slider);
 	
 	menu->addChild(new MenuSeparator);
-//    menu->addChild(createMenuLabel("External SYNC"));
+    //menu->addChild(createMenuLabel("External SYNC"));
 
-    // ← ADD THIS LINE - always visible toggle
     menu->addChild(createBoolPtrMenuItem("Enable Hardware Sync", "", &module->enableESP32Sync));
 	
 	
