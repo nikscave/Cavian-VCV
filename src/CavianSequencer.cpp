@@ -4058,12 +4058,9 @@ struct ZoomedSwingOverlay : TransparentWidget {
     }
 
     void step() override {
-        // Follow mouse position when dragging
-        if (module && module->swingDragging && APP->window) {
-            Vec mousePos = APP->window->mousePos;
-            // Offset so it appears near cursor but not blocking
-            box.pos = mousePos.plus(Vec(-60, -80));
-        }
+        // Note: Mouse following would require platform-specific code
+        // For now, keep overlay at fixed position near grid
+        // It still shows the value as you drag on the grid
         TransparentWidget::step();
     }
 
