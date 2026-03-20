@@ -2222,6 +2222,34 @@ struct RunStopDisplay : ClickableCircleDisplay {
     }
 };
 
+// ============================================================================
+// GROUP/CHANNEL STATUS DISPLAY - Shows current Group and Channel
+// ============================================================================
+struct GroupChannelDisplay : Widget {
+    CavianSequencer* module;
+
+    GroupChannelDisplay() {
+        box.size = mm2px(Vec(25, 4));
+    }
+
+    void draw(const DrawArgs& args) override {
+        if (!module) return;
+
+        // Background
+        nvgFillColor(args.vg, CLR_INACTIVE);
+        nvgBeginPath(args.vg);
+        nvgRect(args.vg, 0, 0, box.size.x, box.size.y);
+        nvgFill(args.vg);
+
+        // Text
+        std::string text = string::f("G%d CH%d", module->activeGroup + 1, module->activeChannel + 1);
+        nvgFontSize(args.vg, 8);
+        nvgFontFaceId(args.vg, APP->window->uiFont->handle);
+        nvgFillColor(args.vg, CLR_WHITE);
+        nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgText(args.vg, box.size.x / 2, box.size.y / 2, text.c_str(), NULL);
+    }
+};
 
 
 // === VIEW MODE CIRCLE BUTTONS ===
@@ -3852,6 +3880,8 @@ struct SwingCell : Widget {
             if (module->gridFramebuffer) {
                 module->gridFramebuffer->dirty = true;
             }
+            // Start drag operation
+            APP->event->setDraggedWidget(this, GLFW_MOUSE_BUTTON_LEFT);
             e.consume(this);
         } else if (e.action == GLFW_RELEASE) {
             isDragging = false;
@@ -3903,6 +3933,9 @@ struct SwingCell : Widget {
         bool isSelected = (module->swingEditRow == row);
         bool isModified = module->isSwingModified(row);
 
+        // Check if this is the current step
+        bool isCurrentStep = (module->running && col == module->currentStep);
+
         // Background
         NVGcolor bgColor = isSelected ? nvgRGBA(40, 40, 60, 255) : CLR_INACTIVE;
         if (isModified) {
@@ -3917,6 +3950,15 @@ struct SwingCell : Widget {
         if (isSelected) {
             nvgStrokeColor(args.vg, CLR_CYAN);
             nvgStrokeWidth(args.vg, 1.5f);
+            nvgStroke(args.vg);
+        }
+
+        // Current step indicator - blue border around current column
+        if (isCurrentStep) {
+            nvgStrokeColor(args.vg, CLR_BLUE);
+            nvgStrokeWidth(args.vg, 2.0f);
+            nvgBeginPath(args.vg);
+            nvgRect(args.vg, 0, 0, box.size.x, box.size.y);
             nvgStroke(args.vg);
         }
 
@@ -4055,6 +4097,14 @@ struct CavianSequencerWidget : ModuleWidget {
 		runDisp->module = module;
 		runDisp->box.pos = mm2px(Vec(105, 6));
 		addChild(runDisp);
+		}
+
+		// Group/Channel Status Display
+		if (module) {
+			GroupChannelDisplay* gcDisp = new GroupChannelDisplay();
+			gcDisp->module = module;
+			gcDisp->box.pos = mm2px(Vec(16.5, 18));  // Below BPM knob
+			addChild(gcDisp);
 		}
 
 	if (module){
