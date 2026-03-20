@@ -3898,11 +3898,17 @@ struct SwingCell : Widget {
             // Single click - select row for editing AND apply template pattern
             module->swingEditRow = row;
 
-            // Apply the template pattern for this row (preset) to swing values
-            // This makes the swing "active" - the pattern will now affect timing
-            for (int step = 0; step < 8; step++) {
-                module->swingFlat[module->activeGroup][row][module->activeChannel][step] =
-                    module->swingTemplates[row][step];
+            // Use per-step swing mode (not global)
+            module->swingGlobalMode = false;
+
+            // Apply the template pattern for this row to ALL presets for current channel
+            // Swing is per-channel only, so it applies to all presets
+            // This makes the swing "active" regardless of which preset is playing
+            for (int preset = 0; preset < 8; preset++) {
+                for (int step = 0; step < 8; step++) {
+                    module->swingFlat[module->activeGroup][preset][module->activeChannel][step] =
+                        module->swingTemplates[row][step];
+                }
             }
 
             if (module->gridFramebuffer) {
