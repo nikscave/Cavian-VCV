@@ -2273,6 +2273,48 @@ struct GroupChannelDisplay : Widget {
     }
 };
 
+// ============================================================================
+// SWING TOGGLE DISPLAY - Toggle swing view mode (only in 64 view)
+// ============================================================================
+struct SwingToggleDisplay : ClickableCircleDisplay {
+    std::string getText() override {
+        if (!module) return "SWING";
+        CavianSequencer* m = (CavianSequencer*)module;
+        // Only show active in 64 view mode
+        if (m->viewMode != CavianSequencer::HORIZONTAL_64) return "----";
+        return m->swingViewEnabled ? "SWING" : "SWING";
+    }
+
+    NVGcolor getColor() override {
+        if (!module) return CLR_GRAY;
+        CavianSequencer* m = (CavianSequencer*)module;
+        if (m->viewMode != CavianSequencer::HORIZONTAL_64) return CLR_GRAY_DARK;
+        return m->swingViewEnabled ? CLR_GREEN : CLR_GRAY;
+    }
+
+    NVGcolor getBevelColor() override {
+        if (!module) return nvgRGBA(100, 100, 100, 100);
+        CavianSequencer* m = (CavianSequencer*)module;
+        if (m->viewMode != CavianSequencer::HORIZONTAL_64) return nvgRGBA(50, 50, 50, 100);
+        return m->swingViewEnabled ? CLR_GREEN : nvgRGBA(100, 100, 100, 100);
+    }
+
+    void onButton(const event::Button& e) override {
+        ClickableCircleDisplay::onButton(e);
+        if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT) {
+            if (!module) return;
+            CavianSequencer* m = (CavianSequencer*)module;
+            // Only toggle in 64 view mode
+            if (m->viewMode == CavianSequencer::HORIZONTAL_64) {
+                m->swingViewEnabled = !m->swingViewEnabled;
+                m->swingEditRow = -1;
+                m->params[CavianSequencer::SWING_VIEW_PARAM].setValue(m->swingViewEnabled ? 1.f : 0.f);
+            }
+            e.consume(this);
+        }
+    }
+};
+
 
 // === VIEW MODE CIRCLE BUTTONS ===
 // These go AFTER the full CavianSequencer struct definition!
@@ -4248,6 +4290,14 @@ struct CavianSequencerWidget : ModuleWidget {
 		runDisp->module = module;
 		runDisp->box.pos = mm2px(Vec(105, 6));
 		addChild(runDisp);
+		}
+
+		// Swing Toggle Display (next to Run/Stop)
+		if (module) {
+			SwingToggleDisplay* swingToggle = new SwingToggleDisplay();
+			swingToggle->module = module;
+			swingToggle->box.pos = mm2px(Vec(92, 6));  // Left of Run/Stop
+			addChild(swingToggle);
 		}
 
 		// Group/Channel Status Display
