@@ -376,6 +376,8 @@ float secondsPerStep = 0.f;
     // Swing view mode (only in 64 view)
     bool swingViewEnabled = false;
     int swingEditRow = -1; // Which row (preset) is being edited
+    bool swingDragging = false; // Is user currently dragging a swing cell?
+    int8_t swingDragValue = 0; // Current value being dragged
 
 	uint8_t groupLoopArray[8] = {1,1,1,1,0,0,0,0};
 uint8_t presetLoopArray[8][8] = {{1,1,1,1,1,1,1,1},
@@ -3926,6 +3928,8 @@ struct SwingCell : Widget {
         if (!module) return;
         isDragging = true;
         originalValue = module->swingFlat[module->activeGroup][row][module->activeChannel][col];
+        module->swingDragging = true;
+        module->swingDragValue = originalValue;
     }
 
     void onDragMove(const event::DragMove& e) override {
@@ -3941,6 +3945,7 @@ struct SwingCell : Widget {
         if (newValue < -50) newValue = -50;
 
         module->swingFlat[module->activeGroup][row][module->activeChannel][col] = newValue;
+        module->swingDragValue = newValue; // Update for zoomed display
 
         if (module->gridFramebuffer) {
             module->gridFramebuffer->dirty = true;
@@ -3949,6 +3954,10 @@ struct SwingCell : Widget {
 
     void onDragEnd(const event::DragEnd& e) override {
         isDragging = false;
+        if (module) {
+            module->swingDragging = false;
+            module->swingDragValue = 0;
+        }
     }
 
     void onDoubleClick(const event::DoubleClick& e) override {
@@ -4035,6 +4044,107 @@ struct SwingCell : Widget {
         nvgMoveTo(args.vg, box.size.x / 2, 0);
         nvgLineTo(args.vg, box.size.x / 2, box.size.y);
         nvgStroke(args.vg);
+    }
+};
+
+// ============================================================================
+// ZOOMED SWING OVERLAY - Magnifying glass effect when dragging swing values
+// ============================================================================
+struct ZoomedSwingOverlay : TransparentWidget {
+    CavianSequencer* module;
+
+    ZoomedSwingOverlay() {
+        box.size = mm2px(Vec(35, 30)); // Larger size for zoomed view
+    }
+
+    void draw(const DrawArgs& args) override {
+        if (!module || !module->swingDragging || !module->swingViewEnabled) return;
+
+        // Get current drag position (we use edit row/col as reference)
+        int row = module->swingEditRow;
+        if (row < 0) return;
+
+        int8_t value = module->swingDragValue;
+
+        // Background with rounded corners
+        nvgFillColor(args.vg, nvgRGBA(20, 20, 30, 240));
+        nvgBeginPath(args.vg);
+        nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 4.0f);
+        nvgFill(args.vg);
+
+        // Border
+        nvgStrokeColor(args.vg, CLR_CYAN);
+        nvgStrokeWidth(args.vg, 2.0f);
+        nvgStroke(args.vg);
+
+        // Title
+        nvgFontSize(args.vg, 7);
+        nvgFontFaceId(args.vg, app::Font::getDefault()->handle);
+        nvgFillColor(args.vg, CLR_WHITE);
+        nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+        nvgText(args.vg, box.size.x / 2, 3, "SWING", NULL);
+
+        // Draw scale with tick marks
+        float scaleHeight = 50.0f;
+        float scaleY = 35.0f;
+        float scaleWidth = box.size.x - 10.0f;
+        float startX = 5.0f;
+
+        // Scale background
+        nvgFillColor(args.vg, nvgRGBA(0, 0, 0, 100));
+        nvgBeginPath(args.vg);
+        nvgRect(args.vg, startX, scaleY, scaleWidth, scaleHeight);
+        nvgFill(args.vg);
+
+        // Center line (0)
+        nvgStrokeColor(args.vg, nvgRGBA(200, 200, 200, 150));
+        nvgStrokeWidth(args.vg, 1.5f);
+        nvgBeginPath(args.vg);
+        nvgMoveTo(args.vg, startX + scaleWidth / 2, scaleY);
+        nvgLineTo(args.vg, startX + scaleWidth / 2, scaleY + scaleHeight);
+        nvgStroke(args.vg);
+
+        // Tick marks at -50, -25, 0, 25, 50
+        int ticks[] = {-50, -25, 0, 25, 50};
+        for (int i = 0; i < 5; i++) {
+            float x = startX + scaleWidth / 2 + (ticks[i] / 50.0f) * (scaleWidth / 2);
+            nvgStrokeColor(args.vg, nvgRGBA(150, 150, 150, 100));
+            nvgStrokeWidth(args.vg, 1.0f);
+            nvgBeginPath(args.vg);
+            nvgMoveTo(args.vg, x, scaleY);
+            nvgLineTo(args.vg, x, scaleY + scaleHeight);
+            nvgStroke(args.vg);
+
+            // Tick labels
+            nvgFontSize(args.vg, 5);
+            nvgFillColor(args.vg, nvgRGBA(150, 150, 150, 200));
+            nvgTextAlign(args.vg, NVG_ALIGN_CENTER);
+            char label[8];
+            snprintf(label, sizeof(label), "%d", ticks[i]);
+            nvgText(args.vg, x, scaleY + scaleHeight + 3, label, NULL);
+        }
+
+        // Draw the value bar (large)
+        float barWidth = 8.0f;
+        float barHeight = scaleHeight - 4.0f;
+        float centerX = startX + scaleWidth / 2;
+        float offsetX = (value / 50.0f) * (scaleWidth / 2 - barWidth / 2);
+
+        // Bar color based on value
+        NVGcolor barColor = value > 0 ? CLR_GREEN : (value < 0 ? CLR_ORANGE : CLR_GRAY);
+        nvgFillColor(args.vg, barColor);
+        nvgBeginPath(args.vg);
+        nvgRect(args.vg, centerX + offsetX - barWidth/2, scaleY + 2, barWidth, barHeight);
+        nvgFill(args.vg);
+
+        // Value text
+        nvgFontSize(args.vg, 10);
+        nvgFontFaceId(args.vg, app::Font::getDefault()->handle);
+        nvgFillColor(args.vg, CLR_WHITE);
+        nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        char valueStr[16];
+        snprintf(valueStr, sizeof(valueStr), "%+d", value);
+        nvgText(args.vg, box.size.x / 2, box.size.y - 2, valueStr, NULL);
     }
 };
 
@@ -4283,6 +4393,15 @@ for (int i = 0; i < 64; i++) {
     gridFramebuffer->addChild(swingCell);
 }
 
+ZoomedSwingOverlay* zoomedSwing = nullptr;
+if (module) {
+    zoomedSwing = new ZoomedSwingOverlay();
+    zoomedSwing->module = module;
+    zoomedSwing->box.pos = mm2px(Vec(40, 40)); // Center of grid area
+    zoomedSwing->visible = false;
+    addChild(zoomedSwing);
+}
+
 struct AnimationOverlay : TransparentWidget {
     CavianSequencer* module;
     
@@ -4500,6 +4619,20 @@ void step() override {
     // Force redraw when toggling or when editing
     if (showSwingCells || m->swingEditRow >= 0) {
         m->gridFramebuffer->dirty = true;
+    }
+
+    // Toggle zoomed swing overlay visibility when dragging
+    for (Widget* child : children) {
+        ZoomedSwingOverlay* zso = dynamic_cast<ZoomedSwingOverlay*>(child);
+        if (zso) {
+            zso->visible = m->swingDragging && showSwingCells;
+            if (zso->visible) {
+                // Position overlay near mouse cursor - use edit row position
+                // For now, position near the grid
+                zso->box.pos = mm2px(Vec(45, 45)); // Center of grid
+                zso->dirty = true;
+            }
+        }
     }
 }
 
