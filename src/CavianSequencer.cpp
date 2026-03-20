@@ -300,6 +300,7 @@ struct CavianSequencer : Module {
         SWING_CASCADE_PRESET_PARAM,
         SWING_CASCADE_GROUP_PARAM,
         SWING_RANDOMIZE_PARAM,
+        STEP_TYPE_PARAM,
         PARAMS_LEN
     };
     enum InputId {
@@ -338,6 +339,11 @@ enum ConflictResolution {
     KEEP_ESP32,         // ESP32 is master
     KEEP_VCV,           // VCV is master
     ASK_USER            // Prompt for choice
+};
+
+enum StepTypeMode {
+    STEP_TRIGGER_ONLY,      // Cycle: Off(0) <-> Trigger(1)
+    STEP_TRIGGER_AND_GATE   // Cycle: Off(0) -> Trigger(1) -> Gate(9) -> Off(0)
 };
 
     // === SWING TEMPLATES (matching ESP) ===
@@ -436,6 +442,9 @@ uint8_t presetLoopArray[8][8] = {{1,1,1,1,1,1,1,1},
 	const float ESP32_CHECK_INTERVAL = 2.0f; // Check every 2 seconds
 	bool enableESP32Sync = false; // Toggled from right-click menu
 
+	// Step type mode - determines how clicking a step cycles through values
+	StepTypeMode stepTypeMode = STEP_TRIGGER_ONLY;
+
 std::string esp32PatternNames[8][8];  // ESP32's pattern names (separate from local)
 bool esp32PatternsLoaded = false;
 
@@ -466,6 +475,7 @@ FramebufferWidget* gridFramebuffer = nullptr;
         config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
         
         configParam(BPM_PARAM, 1.f, 400.f, 120.f, "BPM");
+        configParam(STEP_TYPE_PARAM, 0.f, 1.f, 0.f, "Step Type Mode");
         configButton(RUN_PARAM, "Run");
         
 
@@ -1128,10 +1138,24 @@ void loadESPBinary(std::string path);
 // In cascade mode, step edits apply to ALL presets in the group
 void cascadeStep(int stepIndex) {
     uint8_t current = caveArray[activeGroup][activePreset][activeChannel][stepIndex];
-    uint8_t next = (current == 0) ? 1 : (current == 1 ? 9 : 0);
-    
+    uint8_t next = cycleStepValue(current);
+
     for (int preset = 0; preset < 8; preset++) {
         caveArray[activeGroup][preset][activeChannel][stepIndex] = next;
+    }
+}
+
+// Helper function to cycle step value based on current mode setting
+uint8_t cycleStepValue(uint8_t currentValue) {
+    // STEP_TYPE_PARAM: 0 = Trigger Only, 1 = Trigger + Gate
+    bool useTriggerAndGate = (params[STEP_TYPE_PARAM].getValue() > 0.5f);
+
+    if (!useTriggerAndGate) {
+        // Toggle: Off(0) <-> Trigger(1)
+        return (currentValue == 0) ? 1 : 0;
+    } else {
+        // Cycle: Off(0) -> Trigger(1) -> Gate(9) -> Off(0)
+        return (currentValue == 0) ? 1 : (currentValue == 1 ? 9 : 0);
     }
 }
 
@@ -2791,7 +2815,7 @@ void CavianButton::onButton(const event::Button& e) {
             if (m->presetCascade) {
                 m->cascadeStep(row);
             } else {
-                val = (val == 0) ? 1 : (val == 1 ? 9 : 0);
+                val = m->cycleStepValue(val);
             }
         } else if (col == 3) {
             m->activeChannel = row;
@@ -2812,7 +2836,7 @@ void CavianButton::onButton(const event::Button& e) {
         cell = &m->caveArray[m->activeGroup][row][m->activeChannel][col];
     }
     if (cell) {
-        *cell = (*cell == 0) ? 1 : (*cell == 1 ? 9 : 0);
+        *cell = m->cycleStepValue(*cell);
         m->dragState = *cell;
         m->isDragging = true;
         m->dragVisited[row][col] = true;
@@ -2841,8 +2865,8 @@ void CavianButton::onDragHover(const event::DragHover& e) {
         cell = &m->caveArray[m->activeGroup][row][m->activeChannel][col];
     }
     if (cell) {
-        // Cycle through states: 0 -> 1 -> 9 -> 0 (same logic as initial click)
-        *cell = (*cell == 0) ? 1 : (*cell == 1 ? 9 : 0);
+        // Cycle through states using the mode setting
+        *cell = m->cycleStepValue(*cell);
         m->dragVisited[row][col] = true;
         if (m->gridFramebuffer) {
             m->gridFramebuffer->dirty = true;
@@ -4210,7 +4234,25 @@ void appendContextMenu(Menu* menu) override {
     slider->quantity = q;
     
     menu->addChild(slider);
-	
+
+	menu->addChild(new MenuSeparator);
+	menu->addChild(createMenuLabel("Step Click Mode"));
+
+	// Step type mode submenu
+	// Option 1: Trigger Only (0 -> 1 -> 0)
+	menu->addChild(createCheckMenuItem("Trigger Only (click to toggle)",
+		"",
+		[=]() { return module->params[CavianSequencer::STEP_TYPE_PARAM].getValue() < 0.5f; },
+		[=]() { module->params[CavianSequencer::STEP_TYPE_PARAM].setValue(0.f); }
+	));
+
+	// Option 2: Trigger + Gate (0 -> 1 -> 9 -> 0)
+	menu->addChild(createCheckMenuItem("Trigger + Gate (cycle all)",
+		"",
+		[=]() { return module->params[CavianSequencer::STEP_TYPE_PARAM].getValue() > 0.5f; },
+		[=]() { module->params[CavianSequencer::STEP_TYPE_PARAM].setValue(1.f); }
+	));
+
 	menu->addChild(new MenuSeparator);
     //menu->addChild(createMenuLabel("External SYNC"));
 
