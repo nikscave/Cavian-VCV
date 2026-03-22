@@ -375,6 +375,7 @@ float secondsPerStep = 0.f;
     bool groupLoopEnabled = false;
     bool presetLoopEnabled = false;
     bool setLoopEnabled = false;
+    bool presetLoopCycleComplete = true; // Tracks if preset has completed a full cycle (for group+preset loop coordination)
 
     // Swing view mode (only in 64 view)
     bool swingViewEnabled = false;
@@ -908,26 +909,62 @@ lights[SWING_MODE_LIGHT_AMBER].setBrightness(swingGlobalMode ? 0.f : 1.f);
                     previousPreset = activePreset;
                 }
                 
-                // === GROUP LOOP ADVANCE ===
-                if (groupLoopEnabled) {
-                    int nextGroup = (activeGroup + 1) % 8;
-                    int attempts = 0;
-                    while (attempts < 8 && !groupLoopArray[nextGroup]) {
-                        nextGroup = (nextGroup + 1) % 8;
-                        attempts++;
-                    }
-                    if (groupLoopArray[nextGroup]) activeGroup = nextGroup;
-                }
-                
-                // === PRESET LOOP ADVANCE ===
-                if (presetLoopEnabled) {
+                // === COORDINATED GROUP + PRESET LOOPING ===
+                // When both are enabled, preset must complete a full cycle before group advances
+                if (groupLoopEnabled && presetLoopEnabled) {
+                    // Advance preset
                     int nextPreset = (activePreset + 1) % 8;
                     int attempts = 0;
                     while (attempts < 8 && !presetLoopArray[activeGroup][nextPreset]) {
                         nextPreset = (nextPreset + 1) % 8;
                         attempts++;
                     }
-                    if (presetLoopArray[activeGroup][nextPreset]) activePreset = nextPreset;
+
+                    // Detect if preset wrapped around (completed a cycle)
+                    // If nextPreset is less than or equal to activePreset, we wrapped
+                    if (presetLoopArray[activeGroup][nextPreset] && nextPreset <= activePreset) {
+                        presetLoopCycleComplete = true;
+                    }
+
+                    if (presetLoopArray[activeGroup][nextPreset]) {
+                        activePreset = nextPreset;
+                    }
+
+                    // Only advance group when preset cycle is complete
+                    if (presetLoopCycleComplete) {
+                        int nextGroup = (activeGroup + 1) % 8;
+                        attempts = 0;
+                        while (attempts < 8 && !groupLoopArray[nextGroup]) {
+                            nextGroup = (nextGroup + 1) % 8;
+                            attempts++;
+                        }
+                        if (groupLoopArray[nextGroup]) {
+                            activeGroup = nextGroup;
+                            presetLoopCycleComplete = false; // Reset for next cycle
+                        }
+                    }
+                }
+                else {
+                    // Independent loop modes (only one or neither enabled)
+                    if (groupLoopEnabled) {
+                        int nextGroup = (activeGroup + 1) % 8;
+                        int attempts = 0;
+                        while (attempts < 8 && !groupLoopArray[nextGroup]) {
+                            nextGroup = (nextGroup + 1) % 8;
+                            attempts++;
+                        }
+                        if (groupLoopArray[nextGroup]) activeGroup = nextGroup;
+                    }
+
+                    if (presetLoopEnabled) {
+                        int nextPreset = (activePreset + 1) % 8;
+                        int attempts = 0;
+                        while (attempts < 8 && !presetLoopArray[activeGroup][nextPreset]) {
+                            nextPreset = (nextPreset + 1) % 8;
+                            attempts++;
+                        }
+                        if (presetLoopArray[activeGroup][nextPreset]) activePreset = nextPreset;
+                    }
                 }
             }
             
@@ -1082,6 +1119,9 @@ lights[SWING_MODE_LIGHT_AMBER].setBrightness(swingGlobalMode ? 0.f : 1.f);
 		// Save preset loop enabled state
 		json_object_set_new(rootJ, "presetLoopEnabled", json_boolean(presetLoopEnabled));
 
+		// Save preset loop cycle complete state
+		json_object_set_new(rootJ, "presetLoopCycleComplete", json_boolean(presetLoopCycleComplete));
+
 		// Save group loop array
 		json_t* groupLoopJ = json_array();
 		for (int i = 0; i < 8; i++) {
@@ -1226,6 +1266,12 @@ void dataFromJson(json_t* rootJ) override {
 		if (presetLoopEnabledJ) {
 			presetLoopEnabled = json_boolean_value(presetLoopEnabledJ);
 			lights[PRESET_LOOP_LIGHT].setBrightness(presetLoopEnabled ? 1.f : 0.f);
+		}
+
+		// Load preset loop cycle complete state
+		json_t* presetLoopCycleCompleteJ = json_object_get(rootJ, "presetLoopCycleComplete");
+		if (presetLoopCycleCompleteJ) {
+			presetLoopCycleComplete = json_boolean_value(presetLoopCycleCompleteJ);
 		}
 
 		// Load group loop array
@@ -1658,7 +1704,8 @@ INFO("Extracted JSON body (%u bytes): %s",
         
         data.push_back(0); // BEAT_SYNC_MODE NOT YET on VCV
         data.push_back(groupLoopEnabled); // 
-        data.push_back(presetLoopEnabled); // 
+        data.push_back(presetLoopEnabled); //
+        data.push_back(presetLoopCycleComplete); //
         
 
 		
@@ -3559,7 +3606,8 @@ void CavianSequencer::saveESPBinary(std::string path) {
     
     fputc(0, file);  // BEAT_SYNC_MODE (unused in VCV)
     fputc(groupLoopEnabled, file);  // GROUP_LOOPS_ENABLED 
-    fputc(presetLoopEnabled, file);  // PRESET_LOOPS_ENABLED 
+    fputc(presetLoopEnabled, file);  // PRESET_LOOPS_ENABLED
+    fputc(presetLoopCycleComplete, file);  // PRESET_LOOP_CYCLE_COMPLETE
     
     // === ARRAYS (88 bytes - GROUP_LOOP, PRESET_LOOP, MUTE) ===
     // GROUP_LOOP_ARRAY (8 bytes) - all zeros since VCV doesn't use it
@@ -3680,7 +3728,8 @@ void CavianSequencer::loadESPBinary(std::string path) {
     
     fgetc(file); // BEAT_SYNC_MODE (skip)
     groupLoopEnabled = fgetc(file); // 
-    presetLoopEnabled = fgetc(file); // 
+    presetLoopEnabled = fgetc(file); //
+    presetLoopCycleComplete = fgetc(file); //
     
     // === SKIP GROUP_LOOP_ARRAY (8 bytes) ===
     fseek(file, 8, SEEK_CUR);
