@@ -346,16 +346,16 @@ enum StepTypeMode {
     STEP_TRIGGER_AND_GATE   // Cycle: Off(0) -> Trigger(1) -> Gate(9) -> Off(0)
 };
 
-    // === SWING TEMPLATES (matching ESP) ===
+    // === SWING TEMPLATES (exaggerated for better audibility) ===
     const int8_t swingTemplates[8][8] = {
         {0, 0, 0, 0, 0, 0, 0, 0},            // 0: Straight
-        {0, 15, 0, 15, 0, 15, 0, 15},        // 1: 8th Swing
-        {0, 25, 0, 25, 0, 25, 0, 25},        // 2: Heavy 8th Swing
-        {0, 10, 0, 10, 0, 10, 0, 10},        // 3: Triplet Feel
-        {0, 0, 15, 0, 0, 15, 0, 0},          // 4: 16th Swing
-        {10, -10, 10, -10, 10, -10, 10, -10},// 5: Push-Pull
-        {0, 5, 10, 15, 20, 15, 10, 5},       // 6: Accelerando
-        {20, 15, 10, 5, 0, -5, -10, -15}     // 7: Ritardando
+        {0, 20, 0, 20, 0, 20, 0, 20},        // 1: 8th Swing
+        {0, 35, 0, 35, 0, 35, 0, 35},        // 2: Heavy 8th Swing
+        {0, 15, 0, 15, 0, 15, 0, 15},        // 3: Triplet Feel
+        {0, 0, 25, 0, 0, 25, 0, 0},          // 4: 16th Swing
+        {15, -15, 15, -15, 15, -15, 15, -15},// 5: Push-Pull
+        {0, 10, 20, 30, 40, 30, 20, 10},     // 6: Accelerando
+        {35, 25, 15, 5, 0, -10, -20, -30}     // 7: Ritardando
     };
 
 		float clockPhase = 0.f;
@@ -365,9 +365,12 @@ float secondsPerStep = 0.f;
     uint8_t caveArray[8][8][8][8]; // [group][preset][channel][step]
     int8_t swingFlat[8][8][8][8];  // Swing per step (-50 to +50)
     bool muteChannel[8];
-    bool swingGlobalMode = true;
+    bool swingGlobalMode = false;  // Default to per-step mode
     int8_t swingGlobal[8] = {0};   // Global swing per channel
-    
+
+    // Preset names (for each group)
+    char presetNames[8][8][16] = {}; // [group][preset][name]
+
     // Loop settings
     bool groupLoopEnabled = false;
     bool presetLoopEnabled = false;
@@ -375,9 +378,18 @@ float secondsPerStep = 0.f;
 
     // Swing view mode (only in 64 view)
     bool swingViewEnabled = false;
-    int swingEditRow = -1; // Which row (preset) is being edited
+    int swingEditRow = -1; // Which row is being edited
+    int swingEditCol = -1; // Which column (step) is being edited
+    int activeSwingRow[8] = {0,0,0,0,0,0,0,0}; // Which swing pattern is active for playback per group
     bool swingDragging = false; // Is user currently dragging a swing cell?
     int8_t swingDragValue = 0; // Current value being dragged
+    int8_t swingDragCol = -1; // Column being dragged
+    float swingDragMouseX = 0; // Mouse X during drag for reset button detection
+    float swingDragMouseY = 0; // Mouse Y during drag for reset button detection
+    bool isOverResetStep = false; // Hover state for reset step button
+    bool isOverResetChannel = false; // Hover state for reset channel button
+    bool isInSwingTopHalf = true; // Track if mouse is in top half of zoom overlay
+    float swingDragTopHalfY = 0; // Y position within top half (0=top, 1=bottom of top half)
 
 	uint8_t groupLoopArray[8] = {1,1,1,1,0,0,0,0};
 uint8_t presetLoopArray[8][8] = {{1,1,1,1,1,1,1,1},
@@ -475,6 +487,7 @@ float randomWeight = 0.5f; // Default 50% chance
 	
 	
 FramebufferWidget* gridFramebuffer = nullptr;
+Widget* swingCellContainer = nullptr;
 
 
 
@@ -528,6 +541,19 @@ FramebufferWidget* gridFramebuffer = nullptr;
         
         memset(caveArray, 0, sizeof(caveArray));
         memset(swingFlat, 0, sizeof(swingFlat));
+
+        // Initialize swingFlat with template values for each row
+        // Each row gets its template pattern for all groups, channels, and steps
+        for (int g = 0; g < 8; g++) {
+            for (int row = 0; row < 8; row++) {
+                for (int ch = 0; ch < 8; ch++) {
+                    for (int step = 0; step < 8; step++) {
+                        swingFlat[g][row][ch][step] = swingTemplates[row][step];
+                    }
+                }
+            }
+        }
+
         memset(muteChannel, 0, sizeof(muteChannel));
      //   memset(groupLoopArray, 0, sizeof(groupLoopArray));
      //   memset(presetLoopArray, 0, sizeof(presetLoopArray));
@@ -711,19 +737,44 @@ lights[SWING_MODE_LIGHT_AMBER].setBrightness(swingGlobalMode ? 0.f : 1.f);
         if (swingModeTrigger.process(params[SWING_MODE_PARAM].getValue())) {
             swingGlobalMode = !swingGlobalMode;
         }
-       lights[SWING_MODE_LIGHT].setBrightness(swingGlobalMode ? 1.f : 0.f);
+
+        // When swing view is enabled, always use per-step mode
+        if (swingViewEnabled) {
+            swingGlobalMode = false;
+            // Ensure activeSwingRow is valid for current group
+            if (activeSwingRow[activeGroup] < 0) activeSwingRow[activeGroup] = 0;
+            if (activeSwingRow[activeGroup] > 7) activeSwingRow[activeGroup] = 7;
+        }
+
+        lights[SWING_MODE_LIGHT].setBrightness(swingGlobalMode ? 1.f : 0.f);
 
         // === SWING VIEW TOGGLE (only in 64 mode) ===
         if (viewMode == HORIZONTAL_64) {
             if (swingViewTrigger.process(params[SWING_VIEW_PARAM].getValue())) {
                 swingViewEnabled = !swingViewEnabled;
-                swingEditRow = -1; // Clear selection when toggling
+                // Keep swingEditRow to preserve selection when returning to swing view
+
+                // Re-initialize templates if enabling swing view (ensures they exist)
+                if (swingViewEnabled) {
+                    for (int g = 0; g < 8; g++) {
+                        for (int row = 0; row < 8; row++) {
+                            for (int ch = 0; ch < 8; ch++) {
+                                for (int step = 0; step < 8; step++) {
+                                    // Only initialize if currently zero
+                                    if (swingFlat[g][row][ch][step] == 0) {
+                                        swingFlat[g][row][ch][step] = swingTemplates[row][step];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         } else {
             // Disable swing view when leaving 64 mode
             if (swingViewEnabled) {
                 swingViewEnabled = false;
-                swingEditRow = -1;
+                // Keep swingEditRow to preserve selection when returning to swing view
             }
         }
 
@@ -733,6 +784,9 @@ lights[SWING_MODE_LIGHT_AMBER].setBrightness(swingGlobalMode ? 0.f : 1.f);
                 applySwingTemplate(i);
             }
         }
+
+        // Note: Swing editing via swing view (SwingCell) and templates already
+        // updates swingFlat/swingGlobal/swingGlobalMode directly
 
         // === SWING CASCADE ===
         if (swingCascadePresetTrigger.process(params[SWING_CASCADE_PRESET_PARAM].getValue())) {
@@ -751,9 +805,25 @@ lights[SWING_MODE_LIGHT_AMBER].setBrightness(swingGlobalMode ? 0.f : 1.f);
          // === NAVIGATION (only basic +/- navigation now) ===
         if (groupPrevTrigger.process(params[GROUP_PREV_PARAM].getValue())) {
             activeGroup = (activeGroup - 1 + 8) % 8;
+            // Ensure swing state is valid for new group
+            if (swingEditRow < 0) swingEditRow = 0;
+            if (swingEditRow > 7) swingEditRow = 7;
+            if (activeSwingRow[activeGroup] < 0) activeSwingRow[activeGroup] = 0;
+            if (activeSwingRow[activeGroup] > 7) activeSwingRow[activeGroup] = 7;
+            // Ensure swing values are initialized for this group
+            ensureSwingInitialized(activeGroup);
+            if (gridFramebuffer) gridFramebuffer->dirty = true;
         }
         if (groupNextTrigger.process(params[GROUP_NEXT_PARAM].getValue())) {
             activeGroup = (activeGroup + 1) % 8;
+            // Ensure swing state is valid for new group
+            if (swingEditRow < 0) swingEditRow = 0;
+            if (swingEditRow > 7) swingEditRow = 7;
+            if (activeSwingRow[activeGroup] < 0) activeSwingRow[activeGroup] = 0;
+            if (activeSwingRow[activeGroup] > 7) activeSwingRow[activeGroup] = 7;
+            // Ensure swing values are initialized for this group
+            ensureSwingInitialized(activeGroup);
+            if (gridFramebuffer) gridFramebuffer->dirty = true;
         }
 
         if (presetPrevTrigger.process(params[PRESET_PREV_PARAM].getValue())) {
@@ -870,11 +940,12 @@ lights[SWING_MODE_LIGHT_AMBER].setBrightness(swingGlobalMode ? 0.f : 1.f);
                 uint8_t state = caveArray[activeGroup][activePreset][ch][currentStep];
                 
                 if (state > 0 && !muteChannel[ch]) {
-                    // Get swing offset
-                    int8_t swing = swingGlobalMode ? 
-                        swingGlobal[ch] : 
-                        swingFlat[activeGroup][activePreset][ch][currentStep];
-                    
+                    // Get swing offset from swingFlat - use activeSwingRow for pattern selection
+                    int8_t swing = swingFlat[activeGroup][activeSwingRow[activeGroup]][ch][currentStep];
+
+                    // Debug: log swing values
+                    DEBUG("OUTPUT: g=%d row=%d ch=%d step=%d swing=%d", activeGroup, activeSwingRow[activeGroup], ch, currentStep, swing);
+
                     // Convert swing (-50 to +50) to time offset
                     float swingTime = (swing / 100.f) * secondsPerStep;
                     
@@ -964,6 +1035,82 @@ lights[SWING_MODE_LIGHT_AMBER].setBrightness(swingGlobalMode ? 0.f : 1.f);
 		
 		json_object_set_new(rootJ, "randomWeight", json_real(randomWeight));
 		json_object_set_new(rootJ, "swingViewEnabled", json_boolean(swingViewEnabled));
+
+		// Save active swing row per group
+		json_t* activeSwingRowJ = json_array();
+		for (int g = 0; g < 8; g++) {
+			json_array_append_new(activeSwingRowJ, json_integer(activeSwingRow[g]));
+		}
+		json_object_set_new(rootJ, "activeSwingRow", activeSwingRowJ);
+
+		// Save swing values
+		json_t* swingJ = json_array();
+		for (int g = 0; g < 8; g++) {
+			for (int p = 0; p < 8; p++) {
+				for (int c = 0; c < 8; c++) {
+					for (int s = 0; s < 8; s++) {
+						json_array_append_new(swingJ, json_integer(swingFlat[g][p][c][s]));
+					}
+				}
+			}
+		}
+		json_object_set_new(rootJ, "swingFlat", swingJ);
+
+		// Save swing global values per channel
+		json_t* swingGlobalJ = json_array();
+		for (int i = 0; i < 8; i++) {
+			json_array_append_new(swingGlobalJ, json_integer(swingGlobal[i]));
+		}
+		json_object_set_new(rootJ, "swingGlobal", swingGlobalJ);
+
+		// Save swing global mode
+		json_object_set_new(rootJ, "swingGlobalMode", json_boolean(swingGlobalMode));
+
+		// Save step type mode (0 = trigger only, 1 = trigger + gate)
+		json_object_set_new(rootJ, "stepTypeMode", json_integer(stepTypeMode));
+
+		// Save mute channel states
+		json_t* muteJ = json_array();
+		for (int i = 0; i < 8; i++) {
+			json_array_append_new(muteJ, json_integer(muteChannel[i] ? 1 : 0));
+		}
+		json_object_set_new(rootJ, "muteChannel", muteJ);
+
+		// Save group loop enabled state
+		json_object_set_new(rootJ, "groupLoopEnabled", json_boolean(groupLoopEnabled));
+
+		// Save preset loop enabled state
+		json_object_set_new(rootJ, "presetLoopEnabled", json_boolean(presetLoopEnabled));
+
+		// Save group loop array
+		json_t* groupLoopJ = json_array();
+		for (int i = 0; i < 8; i++) {
+			json_array_append_new(groupLoopJ, json_integer(groupLoopArray[i]));
+		}
+		json_object_set_new(rootJ, "groupLoopArray", groupLoopJ);
+
+		// Save preset loop array
+		json_t* presetLoopJ = json_array();
+		for (int g = 0; g < 8; g++) {
+			json_t* rowJ = json_array();
+			for (int p = 0; p < 8; p++) {
+				json_array_append_new(rowJ, json_integer(presetLoopArray[g][p]));
+			}
+			json_array_append_new(presetLoopJ, rowJ);
+		}
+		json_object_set_new(rootJ, "presetLoopArray", presetLoopJ);
+
+		// Save pattern names
+		json_t* patternNamesJ = json_array();
+		for (int g = 0; g < 8; g++) {
+			json_t* rowJ = json_array();
+			for (int p = 0; p < 8; p++) {
+				json_array_append_new(rowJ, json_string(patternNames[g][p].c_str()));
+			}
+			json_array_append_new(patternNamesJ, rowJ);
+		}
+		json_object_set_new(rootJ, "patternNames", patternNamesJ);
+
         return rootJ;
     }
 	
@@ -1000,6 +1147,122 @@ void dataFromJson(json_t* rootJ) override {
 		if (swingViewJ) {
 			swingViewEnabled = json_boolean_value(swingViewJ);
 			params[SWING_VIEW_PARAM].setValue(swingViewEnabled ? 1.f : 0.f);
+		}
+
+		// Load active swing row per group
+		json_t* activeSwingRowJ = json_object_get(rootJ, "activeSwingRow");
+		if (activeSwingRowJ) {
+			for (int g = 0; g < 8; g++) {
+				json_t* valJ = json_array_get(activeSwingRowJ, g);
+				if (valJ) activeSwingRow[g] = json_integer_value(valJ);
+			}
+		}
+
+		// Load swing values
+		json_t* swingJ = json_object_get(rootJ, "swingFlat");
+		if (swingJ) {
+			int idx = 0;
+			for (int g = 0; g < 8; g++) {
+				for (int p = 0; p < 8; p++) {
+					for (int c = 0; c < 8; c++) {
+						for (int s = 0; s < 8; s++) {
+							json_t* valJ = json_array_get(swingJ, idx++);
+							if (valJ) swingFlat[g][p][c][s] = json_integer_value(valJ);
+						}
+					}
+				}
+			}
+		} else {
+			// No saved swing data - initialize from templates
+			for (int g = 0; g < 8; g++) {
+				for (int row = 0; row < 8; row++) {
+					for (int ch = 0; ch < 8; ch++) {
+						for (int step = 0; step < 8; step++) {
+							swingFlat[g][row][ch][step] = swingTemplates[row][step];
+						}
+					}
+				}
+			}
+		}
+
+		// Load swing global values
+		json_t* swingGlobalJ = json_object_get(rootJ, "swingGlobal");
+		if (swingGlobalJ) {
+			for (int i = 0; i < 8; i++) {
+				json_t* valJ = json_array_get(swingGlobalJ, i);
+				if (valJ) swingGlobal[i] = json_integer_value(valJ);
+			}
+		}
+
+		// Load swing global mode
+		json_t* swingGlobalModeJ = json_object_get(rootJ, "swingGlobalMode");
+		if (swingGlobalModeJ) swingGlobalMode = json_boolean_value(swingGlobalModeJ);
+
+		// Load step type mode
+		json_t* stepTypeModeJ = json_object_get(rootJ, "stepTypeMode");
+		if (stepTypeModeJ) {
+			stepTypeMode = (StepTypeMode)json_integer_value(stepTypeModeJ);
+			params[STEP_TYPE_PARAM].setValue(stepTypeMode == STEP_TRIGGER_AND_GATE ? 1.f : 0.f);
+		}
+
+		// Load mute channel states
+		json_t* muteJ = json_object_get(rootJ, "muteChannel");
+		if (muteJ) {
+			for (int i = 0; i < 8; i++) {
+				json_t* valJ = json_array_get(muteJ, i);
+				if (valJ) muteChannel[i] = (json_integer_value(valJ) == 1);
+			}
+		}
+
+		// Load group loop enabled
+		json_t* groupLoopEnabledJ = json_object_get(rootJ, "groupLoopEnabled");
+		if (groupLoopEnabledJ) {
+			groupLoopEnabled = json_boolean_value(groupLoopEnabledJ);
+			lights[GROUP_LOOP_LIGHT].setBrightness(groupLoopEnabled ? 1.f : 0.f);
+		}
+
+		// Load preset loop enabled
+		json_t* presetLoopEnabledJ = json_object_get(rootJ, "presetLoopEnabled");
+		if (presetLoopEnabledJ) {
+			presetLoopEnabled = json_boolean_value(presetLoopEnabledJ);
+			lights[PRESET_LOOP_LIGHT].setBrightness(presetLoopEnabled ? 1.f : 0.f);
+		}
+
+		// Load group loop array
+		json_t* groupLoopJ = json_object_get(rootJ, "groupLoopArray");
+		if (groupLoopJ) {
+			for (int i = 0; i < 8; i++) {
+				json_t* valJ = json_array_get(groupLoopJ, i);
+				if (valJ) groupLoopArray[i] = json_integer_value(valJ);
+			}
+		}
+
+		// Load preset loop array
+		json_t* presetLoopJ = json_object_get(rootJ, "presetLoopArray");
+		if (presetLoopJ) {
+			for (int g = 0; g < 8; g++) {
+				json_t* rowJ = json_array_get(presetLoopJ, g);
+				if (rowJ) {
+					for (int p = 0; p < 8; p++) {
+						json_t* valJ = json_array_get(rowJ, p);
+						if (valJ) presetLoopArray[g][p] = json_integer_value(valJ);
+					}
+				}
+			}
+		}
+
+		// Load pattern names
+		json_t* patternNamesJ = json_object_get(rootJ, "patternNames");
+		if (patternNamesJ) {
+			for (int g = 0; g < 8; g++) {
+				json_t* rowJ = json_array_get(patternNamesJ, g);
+				if (rowJ) {
+					for (int p = 0; p < 8; p++) {
+						json_t* nameJ = json_array_get(rowJ, p);
+						if (nameJ) patternNames[g][p] = json_string_value(nameJ);
+					}
+				}
+			}
 		}
 
     }
@@ -1065,6 +1328,12 @@ void pasteChannel(int targetChannel) {
     
     void clearPreset(int p) {
         memset(caveArray[activeGroup][p], 0, sizeof(caveArray[activeGroup][p]));
+        // Also reset swing to templates for this preset
+        for (int ch = 0; ch < 8; ch++) {
+            for (int step = 0; step < 8; step++) {
+                swingFlat[activeGroup][p][ch][step] = swingTemplates[p][step];
+            }
+        }
     }
     
     void clearChannel(int c) {
@@ -1156,9 +1425,35 @@ void pasteSwing() {
 }
 
 void clearSwing() {
-    memset(swingFlat[activeGroup][activePreset][activeChannel], 
-           0, 
+    memset(swingFlat[activeGroup][activePreset][activeChannel],
+           0,
            sizeof(swingFlat[activeGroup][activePreset][activeChannel]));
+}
+
+// Ensure a group's swing values are initialized from templates if needed
+void ensureSwingInitialized(int group) {
+    // Check if this group's swing data is all zeros (uninitialized)
+    bool isZero = true;
+    for (int row = 0; row < 8 && isZero; row++) {
+        for (int ch = 0; ch < 8 && isZero; ch++) {
+            for (int step = 0; step < 8 && isZero; step++) {
+                if (swingFlat[group][row][ch][step] != 0) {
+                    isZero = false;
+                }
+            }
+        }
+    }
+
+    // If all zeros, initialize from templates
+    if (isZero) {
+        for (int row = 0; row < 8; row++) {
+            for (int ch = 0; ch < 8; ch++) {
+                for (int step = 0; step < 8; step++) {
+                    swingFlat[group][row][ch][step] = swingTemplates[row][step];
+                }
+            }
+        }
+    }
 }
 
 void saveESPBinary(std::string path);
@@ -1395,7 +1690,10 @@ INFO("Extracted JSON body (%u bytes): %s",
         
         // swingGlobalMode (1 byte)
         data.push_back(swingGlobalMode ? 1 : 0);
-        
+
+        // stepTypeMode (1 byte) - 0 = trigger only, 1 = trigger + gate
+        data.push_back(stepTypeMode == STEP_TRIGGER_AND_GATE ? 1 : 0);
+
         // Count sparse cave data
         uint16_t numCaveSteps = 0;
         for (int g = 0; g < 8; g++)
@@ -1605,7 +1903,11 @@ INFO("Sending pattern name JSON: %s", dbg.c_str());
         }
         
         swingGlobalMode = (response[idx++] == 1);
-        
+
+        // Read stepTypeMode
+        stepTypeMode = (response[idx++] == 1) ? STEP_TRIGGER_AND_GATE : STEP_TRIGGER_ONLY;
+        params[STEP_TYPE_PARAM].setValue(stepTypeMode == STEP_TRIGGER_AND_GATE ? 1.f : 0.f);
+
         // Clear arrays
         memset(caveArray, 0, sizeof(caveArray));
         memset(swingFlat, 0, sizeof(swingFlat));
@@ -2231,7 +2533,7 @@ struct GroupChannelDisplay : Widget {
     CavianSequencer* module;
 
     GroupChannelDisplay() {
-        box.size = mm2px(Vec(22, 4));
+        box.size = mm2px(Vec(27, 6));
     }
 
     void draw(const DrawArgs& args) override {
@@ -2248,28 +2550,70 @@ struct GroupChannelDisplay : Widget {
         nvgRect(args.vg, 0, 0, box.size.x, box.size.y);
         nvgFill(args.vg);
 
+        // Border
+        nvgStrokeColor(args.vg, nvgRGBA(100, 100, 120, 150));
+        nvgStrokeWidth(args.vg, 0.5f);
+        nvgStroke(args.vg);
+
+        // Center divider line
+        nvgStrokeColor(args.vg, nvgRGBA(80, 80, 100, 150));
+        nvgStrokeWidth(args.vg, 0.3f);
+        nvgBeginPath(args.vg);
+        nvgMoveTo(args.vg, box.size.x / 2, 1);
+        nvgLineTo(args.vg, box.size.x / 2, box.size.y - 1);
+        nvgStroke(args.vg);
+
         // Text depends on view mode
-        std::string text;
+        std::string groupText = string::f("Group %d", module->activeGroup + 1);
+        std::string rightText;
         if (module->viewMode == CavianSequencer::HORIZONTAL_8X8) {
-            // 8x8 view: show group and preset
-            text = string::f("G%d P%d", module->activeGroup + 1, module->activePreset + 1);
+            // 8x8 view: show preset
+            rightText = string::f("Preset %d", module->activePreset + 1);
         } else {
-            // 64 view: show group and channel
-            text = string::f("G%d CH%d", module->activeGroup + 1, module->activeChannel + 1);
+            // 64 view: show channel
+            rightText = string::f("Channel %d", module->activeChannel + 1);
         }
 
-        // If in swing view mode, add indicator
-        if (module->swingViewEnabled && module->viewMode == CavianSequencer::HORIZONTAL_64) {
-            text = "SWING " + text;
-            nvgFillColor(args.vg, CLR_GREEN);  // Green text for swing mode
-        } else {
-            nvgFillColor(args.vg, CLR_WHITE);
-        }
+        // Always white text
+        nvgFillColor(args.vg, CLR_WHITE);
 
         nvgFontSize(args.vg, 8);
         nvgFontFaceId(args.vg, APP->window->uiFont->handle);
+
+        // Group text on left
         nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgText(args.vg, box.size.x / 2, box.size.y / 2, text.c_str(), NULL);
+        nvgText(args.vg, box.size.x * 0.25, box.size.y / 2, groupText.c_str(), NULL);
+
+        // Preset/Channel text on right
+        nvgText(args.vg, box.size.x * 0.75, box.size.y / 2, rightText.c_str(), NULL);
+    }
+
+    void onButton(const event::Button& e) override {
+        if (!module || e.button != GLFW_MOUSE_BUTTON_LEFT || e.action != GLFW_PRESS) {
+            return;
+        }
+
+        // Check if Ctrl (or Cmd on Mac) is held for decrement
+        bool ctrlHeld = (e.mods & GLFW_MOD_CONTROL) || (e.mods & GLFW_MOD_SUPER);
+        int direction = ctrlHeld ? -1 : 1;
+
+        // Check which half was clicked
+        float clickX = e.pos.x;
+        float halfWidth = box.size.x / 2;
+
+        if (clickX < halfWidth) {
+            // Left half - change Group
+            module->activeGroup = (module->activeGroup + direction + 8) % 8;
+        } else {
+            // Right half - change Preset or Channel depending on view
+            if (module->viewMode == CavianSequencer::HORIZONTAL_8X8) {
+                module->activePreset = (module->activePreset + direction + 8) % 8;
+            } else {
+                module->activeChannel = (module->activeChannel + direction + 8) % 8;
+            }
+        }
+
+        e.consume(this);
     }
 };
 
@@ -2277,25 +2621,29 @@ struct GroupChannelDisplay : Widget {
 // SWING TOGGLE DISPLAY - Toggle swing view mode (only in 64 view)
 // ============================================================================
 struct SwingToggleDisplay : ClickableCircleDisplay {
+    void draw(const DrawArgs& args) override {
+        // Hide completely in non-64 view modes
+        if (!module || ((CavianSequencer*)module)->viewMode != CavianSequencer::HORIZONTAL_64) {
+            return;
+        }
+        ClickableCircleDisplay::draw(args);
+    }
+
     std::string getText() override {
         if (!module) return "SWING";
         CavianSequencer* m = (CavianSequencer*)module;
-        // Only show active in 64 view mode
-        if (m->viewMode != CavianSequencer::HORIZONTAL_64) return "----";
         return m->swingViewEnabled ? "SWING" : "SWING";
     }
 
     NVGcolor getColor() override {
         if (!module) return CLR_GRAY;
         CavianSequencer* m = (CavianSequencer*)module;
-        if (m->viewMode != CavianSequencer::HORIZONTAL_64) return CLR_GRAY_DARK;
         return m->swingViewEnabled ? CLR_GREEN : CLR_GRAY;
     }
 
     NVGcolor getBevelColor() override {
         if (!module) return nvgRGBA(100, 100, 100, 100);
         CavianSequencer* m = (CavianSequencer*)module;
-        if (m->viewMode != CavianSequencer::HORIZONTAL_64) return nvgRGBA(50, 50, 50, 100);
         return m->swingViewEnabled ? CLR_GREEN : nvgRGBA(100, 100, 100, 100);
     }
 
@@ -2307,10 +2655,80 @@ struct SwingToggleDisplay : ClickableCircleDisplay {
             // Only toggle in 64 view mode
             if (m->viewMode == CavianSequencer::HORIZONTAL_64) {
                 m->swingViewEnabled = !m->swingViewEnabled;
-                m->swingEditRow = -1;
+                // Keep swingEditRow to preserve selection when returning to swing view
                 m->params[CavianSequencer::SWING_VIEW_PARAM].setValue(m->swingViewEnabled ? 1.f : 0.f);
             }
             e.consume(this);
+        }
+    }
+};
+
+// ============================================================================
+// PRESET NAME LABELS - Display preset names to left of grid
+// ============================================================================
+struct PresetNameLabels : Widget {
+    CavianSequencer* module;
+
+    PresetNameLabels() {
+        box.size = mm2px(Vec(18, 95));
+    }
+
+    void draw(const DrawArgs& args) override {
+        if (!module) return;
+
+        // Only show in 64 view mode when swing is enabled
+        if (module->viewMode != CavianSequencer::HORIZONTAL_64 || !module->swingViewEnabled) {
+            return;
+        }
+
+        const float buttonSpacing = 11.5f;
+        float startY = 0;
+
+        // Each row is a swing template
+        for (int row = 0; row < 8; row++) {
+            // Show swing template names - use shorter names
+            std::string text;
+            switch(row) {
+                case 0: text = "STRAIGHT"; break;
+                case 1: text = "8th SWING"; break;
+                case 2: text = "HEAVY 8th"; break;
+                case 3: text = "TRIPLET"; break;
+                case 4: text = "16th SW"; break;
+                case 5: text = "PUSH-PULL"; break;
+                case 6: text = "ACCEL"; break;
+                case 7: text = "RITARD"; break;
+            }
+
+            // Highlight the selected row (swingEditRow) and active row (playing)
+            bool isSelected = (row == module->swingEditRow);
+            bool isPlaying = (row == module->activeSwingRow[module->activeGroup]);
+
+            // Draw background for label - wider
+            nvgBeginPath(args.vg);
+            nvgRoundedRect(args.vg, 0, startY, box.size.x, buttonSpacing - 1, 2.0);
+            NVGcolor bgColor = nvgRGBA(20, 20, 30, 255);
+            if (isPlaying) {
+                bgColor = nvgRGBA(40, 80, 40, 255); // Green for playing
+            } else if (isSelected) {
+                bgColor = nvgRGBA(60, 60, 100, 255); // Blue for selected
+            }
+            nvgFillColor(args.vg, bgColor);
+            nvgFill(args.vg);
+
+            // Draw text - larger
+            nvgFontSize(args.vg, 8);
+            nvgFontFaceId(args.vg, APP->window->uiFont->handle);
+            NVGcolor textColor = nvgRGBA(180, 180, 180, 255);
+            if (isPlaying) {
+                textColor = nvgRGBA(100, 255, 100, 255); // Bright green for playing
+            } else if (isSelected) {
+                textColor = CLR_VINTAGE_YELLOW; // Yellow for selected
+            }
+            nvgFillColor(args.vg, textColor);
+            nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgText(args.vg, box.size.x / 2, startY + buttonSpacing / 2, text.c_str(), NULL);
+
+            startY += buttonSpacing;
         }
     }
 };
@@ -3083,22 +3501,33 @@ void NavDisplay::draw(const DrawArgs& args) {
     nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 2.0);
     nvgFillColor(args.vg, nvgRGBA(15, 15, 25, 255));
     nvgFill(args.vg);
-    
+
     // Border
     nvgStrokeWidth(args.vg, 0.5);
     nvgStrokeColor(args.vg, nvgRGBA(100, 126, 234, 100));
     nvgBeginPath(args.vg);
     nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 2.0);
     nvgStroke(args.vg);
-    
+
     // Text
     std::string text = label;
     if (module && valuePtr) {
-        text += std::to_string(*valuePtr + 1);
+        int val = *valuePtr;
+        // Check if this is the preset display (label starts with "Preset")
+        if (label.find("Preset") != std::string::npos) {
+            // Show pattern name if it exists, otherwise show number
+            if (!module->patternNames[module->activeGroup][val].empty()) {
+                text = module->patternNames[module->activeGroup][val];
+            } else {
+                text += std::to_string(val + 1);
+            }
+        } else {
+            text += std::to_string(val + 1);
+        }
     } else {
         text += "1";
     }
-    
+
     nvgFontSize(args.vg, 9);
     nvgFontFaceId(args.vg, APP->window->uiFont->handle);
     nvgFillColor(args.vg, nvgRGBA(200, 200, 220, 255));
@@ -3158,7 +3587,10 @@ void CavianSequencer::saveESPBinary(std::string path) {
     
     // swingGlobalMode (1 byte)
     fputc(swingGlobalMode ? 1 : 0, file);
-    
+
+    // stepTypeMode (1 byte)
+    fputc(stepTypeMode == STEP_TRIGGER_AND_GATE ? 1 : 0, file);
+
     // === COUNT SPARSE CAVE DATA ===
     uint16_t numCaveSteps = 0;
     for (int g = 0; g < 8; g++)
@@ -3269,7 +3701,11 @@ void CavianSequencer::loadESPBinary(std::string path) {
     
     // === READ swingGlobalMode ===
     swingGlobalMode = (fgetc(file) == 1);
-    
+
+    // === READ stepTypeMode ===
+    stepTypeMode = (fgetc(file) == 1) ? STEP_TRIGGER_AND_GATE : STEP_TRIGGER_ONLY;
+    params[STEP_TYPE_PARAM].setValue(stepTypeMode == STEP_TRIGGER_AND_GATE ? 1.f : 0.f);
+
     // === CLEAR ARRAYS ===
     memset(caveArray, 0, sizeof(caveArray));
     memset(swingFlat, 0, sizeof(swingFlat));
@@ -3922,7 +4358,7 @@ struct RandomWeightSlider : ui::Slider {
 // ============================================================================
 // SWING CELL WIDGET - Horizontal bar showing swing value
 // ============================================================================
-struct SwingCell : Widget {
+struct SwingCell : OpaqueWidget {
     CavianSequencer* module;
     int row;    // preset (0-7)
     int col;    // step (0-7)
@@ -3939,21 +4375,14 @@ struct SwingCell : Widget {
         if (!module || e.button != GLFW_MOUSE_BUTTON_LEFT) return;
 
         if (e.action == GLFW_PRESS) {
-            // Single click - select row for editing AND apply template pattern
+            // Select row for visual highlighting
             module->swingEditRow = row;
+
+            // Set this row as the active swing pattern for playback for this group
+            module->activeSwingRow[module->activeGroup] = row;
 
             // Use per-step swing mode (not global)
             module->swingGlobalMode = false;
-
-            // Apply the template pattern for this row to ALL presets for current channel
-            // Swing is per-channel only, so it applies to all presets
-            // This makes the swing "active" regardless of which preset is playing
-            for (int preset = 0; preset < 8; preset++) {
-                for (int step = 0; step < 8; step++) {
-                    module->swingFlat[module->activeGroup][preset][module->activeChannel][step] =
-                        module->swingTemplates[row][step];
-                }
-            }
 
             if (module->gridFramebuffer) {
                 module->gridFramebuffer->dirty = true;
@@ -3961,9 +4390,8 @@ struct SwingCell : Widget {
             // Start drag operation
             APP->event->setDraggedWidget(this, GLFW_MOUSE_BUTTON_LEFT);
             e.consume(this);
-        } else if (e.action == GLFW_RELEASE) {
-            isDragging = false;
         }
+        // Don't reset isDragging here - let onDragEnd handle it
     }
 
     void onDragStart(const event::DragStart& e) override {
@@ -3972,33 +4400,102 @@ struct SwingCell : Widget {
         originalValue = module->swingFlat[module->activeGroup][row][module->activeChannel][col];
         module->swingDragging = true;
         module->swingDragValue = originalValue;
+        module->swingDragCol = col;
+        DEBUG(">>> onDragStart: row=%d col=%d isDragging=%d", row, col, isDragging);
     }
 
     void onDragMove(const event::DragMove& e) override {
+        DEBUG(">>> onDragMove: isDragging=%d deltaX=%.1f", isDragging, e.mouseDelta.x);
         if (!module || !isDragging) return;
 
-        // Convert drag delta to swing value (-50 to +50)
-        float deltaX = e.mouseDelta.x;
-        // Scale: ~100 pixels = full range
-        int8_t newValue = originalValue + (int8_t)(deltaX / 2.0f);
+        // Check if mouse is in top half of zoom overlay using module flag
+        // If in bottom half, don't adjust swing - allow reset button interaction
+        bool inTopHalf = module->isInSwingTopHalf;
+        DEBUG(">>> DRAG check: inTopHalf=%d", inTopHalf);
 
-        // Clamp to valid range
-        if (newValue > 50) newValue = 50;
-        if (newValue < -50) newValue = -50;
+        // Only adjust swing if in top half
+        if (inTopHalf) {
+            // Calculate sensitivity based on Y position in top half
+            // Top of top half (Y=0) = slow (0.25), bottom of top half (Y=1) = fast (1.0)
+            float topHalfY = module->swingDragTopHalfY;
+            float sensitivity = 0.25f + (topHalfY * 0.75f); // Range: 0.25 to 1.0
+            DEBUG(">>> SENSITIVITY: topHalfY=%.2f sensitivity=%.2f", topHalfY, sensitivity);
 
-        module->swingFlat[module->activeGroup][row][module->activeChannel][col] = newValue;
-        module->swingDragValue = newValue; // Update for zoomed display
+            // Use module's swingDragValue (accumulated) as base
+            int8_t currentValue = module->swingDragValue;
 
-        if (module->gridFramebuffer) {
-            module->gridFramebuffer->dirty = true;
+            // Convert drag delta to swing value (-50 to +50) with sensitivity
+            float deltaX = e.mouseDelta.x;
+            float newValueFloat = currentValue + (deltaX / (2.0f / sensitivity));
+            int8_t newValue = (int8_t)roundf(newValueFloat);
+
+            // Clamp to valid range
+            if (newValue > 50) newValue = 50;
+            if (newValue < -50) newValue = -50;
+
+            // Update only the preset (row) that was clicked
+            module->swingFlat[module->activeGroup][row][module->activeChannel][col] = newValue;
+            module->swingDragValue = newValue;
+            DEBUG(">>> DRAG: g=%d row=%d ch=%d col=%d newValue=%d", module->activeGroup, row, module->activeChannel, col, newValue);
+
+            if (module->gridFramebuffer) {
+                module->gridFramebuffer->dirty = true;
+            }
+        } else {
+            DEBUG(">>> DRAG: in bottom half - not adjusting swing");
+        }
+        e.consume(this);
+    }
+
+    void onDragHover(const event::DragHover& e) override {
+        // Track mouse position in module (used by other widgets)
+        if (module && isDragging) {
+            module->swingDragMouseX = e.pos.x;
+            module->swingDragMouseY = e.pos.y;
         }
     }
 
     void onDragEnd(const event::DragEnd& e) override {
+        DEBUG(">>> onDragEnd: row=%d col=%d isOverResetStep=%d isOverResetChannel=%d",
+              row, col, module ? module->isOverResetStep : -1, module ? module->isOverResetChannel : -1);
         isDragging = false;
         if (module) {
+            // Check if mouse was released over reset button using module flags
+            if (module->isOverResetStep) {
+                // Reset Step - just this step
+                int stepCol = module->swingDragCol;
+                int swingRow = module->swingEditRow;
+                if (swingRow >= 0 && stepCol >= 0) {
+                    module->swingFlat[module->activeGroup][swingRow][module->activeChannel][stepCol] =
+                        module->swingTemplates[swingRow][stepCol];
+                    DEBUG(">>> Reset step %d to template", stepCol);
+                    if (module->gridFramebuffer) {
+                        module->gridFramebuffer->dirty = true;
+                    }
+                }
+            } else if (module->isOverResetChannel) {
+                // Reset Channel - all steps for this channel
+                int swingRow = module->swingEditRow;
+                if (swingRow >= 0) {
+                    for (int s = 0; s < 8; s++) {
+                        module->swingFlat[module->activeGroup][swingRow][module->activeChannel][s] =
+                            module->swingTemplates[swingRow][s];
+                    }
+                    DEBUG(">>> Reset channel to templates");
+                    if (module->gridFramebuffer) {
+                        module->gridFramebuffer->dirty = true;
+                    }
+                }
+            }
+
             module->swingDragging = false;
             module->swingDragValue = 0;
+            module->swingDragCol = -1;
+            module->swingDragMouseX = 0;
+            module->swingDragMouseY = 0;
+            module->isOverResetStep = false;
+            module->isOverResetChannel = false;
+            module->isInSwingTopHalf = true;
         }
     }
 
@@ -4016,13 +4513,19 @@ struct SwingCell : Widget {
 
         int8_t swingValue = module->swingFlat[module->activeGroup][row][module->activeChannel][col];
         bool isSelected = (module->swingEditRow == row);
+        bool isActive = (row == module->activeSwingRow[module->activeGroup]); // This row is playing
         bool isModified = module->isSwingModified(row);
 
         // Check if this is the current step
         bool isCurrentStep = (module->running && col == module->currentStep);
 
-        // Background
-        NVGcolor bgColor = isSelected ? nvgRGBA(40, 40, 60, 255) : CLR_INACTIVE;
+        // Background - highlight active row in green, selected in blue
+        NVGcolor bgColor = CLR_INACTIVE;
+        if (isActive) {
+            bgColor = nvgRGBA(40, 60, 40, 255); // Green tint for active
+        } else if (isSelected) {
+            bgColor = nvgRGBA(40, 40, 60, 255); // Blue tint for selected
+        }
         if (isModified) {
             bgColor = nvgRGBA(30, 35, 45, 255); // Slightly different when modified
         }
@@ -4091,19 +4594,130 @@ struct SwingCell : Widget {
 
 // ============================================================================
 // ZOOMED SWING OVERLAY - Magnifying glass effect when dragging swing values
+// with Reset Step / Reset Channel buttons that trigger on drag release
 // ============================================================================
-struct ZoomedSwingOverlay : TransparentWidget {
+struct ZoomedSwingOverlay : OpaqueWidget {
     CavianSequencer* module;
+    bool isOverResetStep = false;
+    bool isOverResetChannel = false;
 
     ZoomedSwingOverlay() {
-        box.size = mm2px(Vec(50, 45)); // Much larger for zoomed view
+        box.size = mm2px(Vec(80, 45)); // Larger to fit big buttons
+    }
+
+    // Handle clicks - check if click is on a button
+    void onButton(const event::Button& e) override {
+        if (!module || e.button != GLFW_MOUSE_BUTTON_LEFT || e.action != GLFW_PRESS) {
+            OpaqueWidget::onButton(e);
+            return;
+        }
+
+        float mx = e.pos.x;
+        float my = e.pos.y;
+        float w = box.size.x;
+        float h = box.size.y;
+
+        // Two larger buttons at bottom
+        float buttonWidth = 70.0f;
+        float buttonHeight = 20.0f;
+        float buttonY = h - buttonHeight - 4;
+        float stepButtonX = 4.0f;
+        float channelButtonX = w - buttonWidth - 4;
+
+        // Check if clicked on Reset Step button
+        if (mx >= stepButtonX && mx <= stepButtonX + buttonWidth &&
+            my >= buttonY && my <= buttonY + buttonHeight) {
+            // Reset current step to template default
+            int row = module->swingEditRow;
+            int col = module->swingDragCol;
+            if (row >= 0 && col >= 0) {
+                module->swingFlat[module->activeGroup][row][module->activeChannel][col] =
+                    module->swingTemplates[row][col];
+                if (module->gridFramebuffer) {
+                    module->gridFramebuffer->dirty = true;
+                }
+            }
+            e.consume(this);
+            return;
+        }
+
+        // Check if clicked on Reset Channel button
+        if (mx >= channelButtonX && mx <= channelButtonX + buttonWidth &&
+            my >= buttonY && my <= buttonY + buttonHeight) {
+            // Reset entire channel for this swing row to template defaults
+            int row = module->swingEditRow;
+            if (row >= 0) {
+                for (int step = 0; step < 8; step++) {
+                    module->swingFlat[module->activeGroup][row][module->activeChannel][step] =
+                        module->swingTemplates[row][step];
+                }
+                if (module->gridFramebuffer) {
+                    module->gridFramebuffer->dirty = true;
+                }
+            }
+            e.consume(this);
+            return;
+        }
+
+        // Not on a button - let it pass through
+        OpaqueWidget::onButton(e);
+    }
+
+    // Track hover for button highlighting
+    void onHover(const event::Hover& e) override {
+        updateHoverState(e.pos.x, e.pos.y);
+        OpaqueWidget::onHover(e);
+    }
+
+    // Also handle drag hover events (when dragging over this widget)
+    void onDragHover(const event::DragHover& e) override {
+        updateHoverState(e.pos.x, e.pos.y);
+        OpaqueWidget::onDragHover(e);
+    }
+
+    // Helper to update hover state from position
+    void updateHoverState(float mx, float my) {
+        float w = box.size.x;
+        float h = box.size.y;
+
+        // Track top/bottom half for SwingCell to use
+        if (module) {
+            module->isInSwingTopHalf = (my < h * 0.5f);
+            // Calculate Y position within top half (0 = top, 1 = bottom of top half)
+            if (my < h * 0.5f) {
+                module->swingDragTopHalfY = my / (h * 0.5f); // Normalize to 0-1
+            } else {
+                module->swingDragTopHalfY = 1.0f;
+            }
+            DEBUG(">>> OVERLAY hover: y=%.1f h=%.1f topHalf=%d topHalfY=%.2f", my, h, module->isInSwingTopHalf, module->swingDragTopHalfY);
+        }
+
+        float buttonWidth = 70.0f;
+        float buttonHeight = 20.0f;
+        float buttonY = h - buttonHeight - 4;
+        float stepButtonX = 4.0f;
+        float channelButtonX = w - buttonWidth - 4;
+
+        isOverResetStep = (mx >= stepButtonX && mx <= stepButtonX + buttonWidth &&
+                         my >= buttonY && my <= buttonY + buttonHeight);
+        isOverResetChannel = (mx >= channelButtonX && mx <= channelButtonX + buttonWidth &&
+                           my >= buttonY && my <= buttonY + buttonHeight);
+
+        // Also sync to module for onDragEnd check
+        if (module) {
+            module->isOverResetStep = isOverResetStep;
+            module->isOverResetChannel = isOverResetChannel;
+        }
     }
 
     void step() override {
-        // Note: Mouse following would require platform-specific code
-        // For now, keep overlay at fixed position near grid
-        // It still shows the value as you drag on the grid
-        TransparentWidget::step();
+        OpaqueWidget::step();
+        // Reset hover state when not dragging
+        if (module && !module->swingDragging) {
+            isOverResetStep = false;
+            isOverResetChannel = false;
+            module->isInSwingTopHalf = true;
+        }
     }
 
     void draw(const DrawArgs& args) override {
@@ -4126,16 +4740,31 @@ struct ZoomedSwingOverlay : TransparentWidget {
         nvgStrokeWidth(args.vg, 2.0f);
         nvgStroke(args.vg);
 
-        // Title
-        nvgFontSize(args.vg, 7);
+        // Divider line between top (adjust) and bottom (reset buttons) halves
+        float dividerY = box.size.y * 0.5f;
+        nvgStrokeColor(args.vg, nvgRGBA(100, 100, 120, 180));
+        nvgStrokeWidth(args.vg, 1.5f);
+        nvgBeginPath(args.vg);
+        nvgMoveTo(args.vg, 4, dividerY);
+        nvgLineTo(args.vg, box.size.x - 4, dividerY);
+        nvgStroke(args.vg);
+
+        // Title with preset name
+        nvgFontSize(args.vg, 8);
         nvgFontFaceId(args.vg, APP->window->uiFont->handle);
         nvgFillColor(args.vg, CLR_WHITE);
         nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
-        nvgText(args.vg, box.size.x / 2, 3, "SWING", NULL);
 
-        // Draw scale with tick marks - centered in larger box
-        float scaleHeight = 25.0f;
-        float scaleY = 18.0f;
+        // Get swing template name for this row
+        std::string swingName = SWING_TEMPLATE_NAMES[row];
+
+        // Draw title with swing template name
+        std::string title = "SWING: " + swingName;
+        nvgText(args.vg, box.size.x / 2, 3, title.c_str(), NULL);
+
+        // Draw scale with tick marks - scaled down for smaller box
+        float scaleHeight = 10.0f;
+        float scaleY = 10.0f;
         float scaleWidth = box.size.x - 8.0f;
         float startX = 4.0f;
 
@@ -4186,14 +4815,49 @@ struct ZoomedSwingOverlay : TransparentWidget {
         nvgRect(args.vg, centerX + offsetX - barWidth/2, scaleY + 1, barWidth, barHeight);
         nvgFill(args.vg);
 
-        // Value text - bigger in larger box
+        // Value text - moved up to make room for buttons
         nvgFontSize(args.vg, 14);
         nvgFontFaceId(args.vg, APP->window->uiFont->handle);
         nvgFillColor(args.vg, CLR_WHITE);
         nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         char valueStr[16];
         snprintf(valueStr, sizeof(valueStr), "%+d", value);
-        nvgText(args.vg, box.size.x / 2, box.size.y - 4, valueStr, NULL);
+        nvgText(args.vg, box.size.x / 2, scaleY + scaleHeight + 14, valueStr, NULL);
+
+        // Draw reset buttons at bottom - larger buttons
+        float buttonWidth = 70.0f;
+        float buttonHeight = 20.0f;
+        float buttonY = box.size.y - buttonHeight - 4;
+        float stepButtonX = 4.0f;
+        float channelButtonX = box.size.x - buttonWidth - 4;
+
+        // Reset Step button (left) - orange when hovered
+        NVGcolor stepBtnColor = isOverResetStep ? nvgRGBA(100, 70, 40, 255) : nvgRGBA(40, 35, 30, 255);
+        nvgFillColor(args.vg, stepBtnColor);
+        nvgBeginPath(args.vg);
+        nvgRoundedRect(args.vg, stepButtonX, buttonY, buttonWidth, buttonHeight, 3.0f);
+        nvgFill(args.vg);
+        nvgStrokeColor(args.vg, isOverResetStep ? CLR_ORANGE : nvgRGBA(100, 90, 80, 200));
+        nvgStrokeWidth(args.vg, 2.0f);
+        nvgStroke(args.vg);
+        nvgFontSize(args.vg, 11);
+        nvgFillColor(args.vg, CLR_WHITE);
+        nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_CENTER);
+        nvgText(args.vg, stepButtonX + buttonWidth/2, buttonY + buttonHeight/2, "Reset Step", NULL);
+
+        // Reset Channel button (right) - orange when hovered
+        NVGcolor chanBtnColor = isOverResetChannel ? nvgRGBA(100, 70, 40, 255) : nvgRGBA(40, 35, 30, 255);
+        nvgFillColor(args.vg, chanBtnColor);
+        nvgBeginPath(args.vg);
+        nvgRoundedRect(args.vg, channelButtonX, buttonY, buttonWidth, buttonHeight, 3.0f);
+        nvgFill(args.vg);
+        nvgStrokeColor(args.vg, isOverResetChannel ? CLR_ORANGE : nvgRGBA(100, 90, 80, 200));
+        nvgStrokeWidth(args.vg, 2.0f);
+        nvgStroke(args.vg);
+        nvgFontSize(args.vg, 11);
+        nvgFillColor(args.vg, CLR_WHITE);
+        nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_CENTER);
+        nvgText(args.vg, channelButtonX + buttonWidth/2, buttonY + buttonHeight/2, "Reset Channel", NULL);
     }
 };
 
@@ -4300,12 +4964,20 @@ struct CavianSequencerWidget : ModuleWidget {
 			addChild(swingToggle);
 		}
 
-		// Group/Channel Status Display
+		// Group/Channel/Preset Status Display - bottom left, right of view buttons
 		if (module) {
 			GroupChannelDisplay* gcDisp = new GroupChannelDisplay();
 			gcDisp->module = module;
-			gcDisp->box.pos = mm2px(Vec(58, 10));  // Above column 5, higher up
+			gcDisp->box.pos = mm2px(Vec(21, 117.5));  // Bottom left, right of view display
 			addChild(gcDisp);
+		}
+
+		// Preset Name Labels (left of grid in 64 swing view)
+		if (module) {
+			PresetNameLabels* presetLabels = new PresetNameLabels();
+			presetLabels->module = module;
+			presetLabels->box.pos = mm2px(Vec(-18, 22));  // Left of grid, wider labels
+			addChild(presetLabels);
 		}
 
 	if (module){
@@ -4320,21 +4992,21 @@ struct CavianSequencerWidget : ModuleWidget {
 		
 		        // Reset Input (bottom left)
         addInput(createInputCentered<ResetInPort>(
-            mm2px(Vec(68.5, 121)), 
+            mm2px(Vec(72, 121)), 
             module, 
             CavianSequencer::RESET_INPUT
         ));
 		
 		// Clock Input (bottom left)
         addInput(createInputCentered<ClockInPort>(
-            mm2px(Vec(56, 121)), 
+            mm2px(Vec(59.5, 121)), 
             module, 
             CavianSequencer::CLK_INPUT
         ));
            
         // Master Clock Output (bottom right)
         addOutput(createOutputCentered<ClockOutPort>(
-            mm2px(Vec(80, 121)), 
+            mm2px(Vec(83.5, 121)), 
             module, 
             CavianSequencer::MASTER_CLK_OUTPUT
         ));
@@ -4435,26 +5107,36 @@ for (int i = 0; i < 64; i++) {
     gridFramebuffer->addChild(btn);
 }
 
-// Add swing cells (hidden by default, shown in swing view mode)
+// Add swing cells in a separate container (on top of gridFramebuffer)
+Widget* swingCellContainer = new Widget();
+swingCellContainer->box.pos = mm2px(Vec(gridStartX, gridStartY));
+swingCellContainer->box.size = mm2px(Vec(buttonSpacing * 8, buttonSpacing * 8));
+addChild(swingCellContainer);
+
+if (module) {
+    module->swingCellContainer = swingCellContainer;
+}
+
+// Add swing cells to the new container
 for (int i = 0; i < 64; i++) {
     SwingCell* swingCell = new SwingCell();
     swingCell->module = module;
     swingCell->row = i / 8;
     swingCell->col = i % 8;
     swingCell->box.pos = mm2px(Vec(
-        glowPadding + swingCell->col * buttonSpacing,
-        glowPadding + swingCell->row * buttonSpacing
+        swingCell->col * buttonSpacing,
+        swingCell->row * buttonSpacing
     ));
     // Initially hidden - will be shown via Z-order when swing view enabled
     swingCell->visible = false;
-    gridFramebuffer->addChild(swingCell);
+    swingCellContainer->addChild(swingCell);
 }
 
 ZoomedSwingOverlay* zoomedSwing = nullptr;
 if (module) {
     zoomedSwing = new ZoomedSwingOverlay();
     zoomedSwing->module = module;
-    zoomedSwing->box.pos = mm2px(Vec(40, 40)); // Center of grid area
+    zoomedSwing->box.pos = mm2px(Vec(25, 30)); // Center of grid area (adjusted for larger overlay)
     zoomedSwing->visible = false;
     addChild(zoomedSwing);
 }
@@ -4661,16 +5343,18 @@ void step() override {
 
     // Toggle visibility of CavianButton vs SwingCell
     for (Widget* child : m->gridFramebuffer->children) {
-        SwingCell* sc = dynamic_cast<SwingCell*>(child);
         CavianButton* cb = dynamic_cast<CavianButton*>(child);
-        if (sc) {
-            // This is a SwingCell
-            child->visible = showSwingCells;
-        } else if (cb) {
+        if (cb) {
             // This is a CavianButton - hide in swing mode
             child->visible = !showSwingCells;
         }
-        // Other children (AnimationOverlay, etc.) remain visible
+    }
+
+    // Toggle SwingCell visibility using the dedicated container
+    if (m->swingCellContainer) {
+        for (Widget* child : m->swingCellContainer->children) {
+            child->visible = showSwingCells;
+        }
     }
 
     // Force redraw when toggling or when editing
@@ -4679,11 +5363,15 @@ void step() override {
     }
 
     // Toggle zoomed swing overlay visibility when dragging
-    // Position is now handled by ZoomedSwingOverlay::step() to follow mouse
+    // Also update hover state for reset buttons based on mouse position
     for (Widget* child : children) {
         ZoomedSwingOverlay* zso = dynamic_cast<ZoomedSwingOverlay*>(child);
         if (zso) {
             zso->visible = m->swingDragging && showSwingCells;
+
+            // Sync overlay hover state with module
+            zso->isOverResetStep = m->isOverResetStep;
+            zso->isOverResetChannel = m->isOverResetChannel;
         }
     }
 }
@@ -4722,14 +5410,20 @@ void appendContextMenu(Menu* menu) override {
 	menu->addChild(createCheckMenuItem("Trigger Only (click to toggle)",
 		"",
 		[=]() { return module->params[CavianSequencer::STEP_TYPE_PARAM].getValue() < 0.5f; },
-		[=]() { module->params[CavianSequencer::STEP_TYPE_PARAM].setValue(0.f); }
+		[=]() {
+			module->params[CavianSequencer::STEP_TYPE_PARAM].setValue(0.f);
+			module->stepTypeMode = CavianSequencer::STEP_TRIGGER_ONLY;
+		}
 	));
 
 	// Option 2: Trigger + Gate (0 -> 1 -> 9 -> 0)
 	menu->addChild(createCheckMenuItem("Trigger + Gate (cycle all)",
 		"",
 		[=]() { return module->params[CavianSequencer::STEP_TYPE_PARAM].getValue() > 0.5f; },
-		[=]() { module->params[CavianSequencer::STEP_TYPE_PARAM].setValue(1.f); }
+		[=]() {
+			module->params[CavianSequencer::STEP_TYPE_PARAM].setValue(1.f);
+			module->stepTypeMode = CavianSequencer::STEP_TRIGGER_AND_GATE;
+		}
 	));
 
 	menu->addChild(new MenuSeparator);
